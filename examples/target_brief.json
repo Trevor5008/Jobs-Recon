@@ -1,0 +1,27 @@
+{
+  "name": "Entry-Level AI / Software Roles",
+  "role_family": "Software Engineering / AI",
+  "title_keywords": [
+    "software engineer",
+    "python developer",
+    "machine learning engineer",
+    "data analyst",
+    "intern"
+  ],
+  "locations": [
+    "Atlanta, GA",
+    "Remote"
+  ],
+  "remote_preference": "hybrid_or_in_person",
+  "seniority": [
+    "internship",
+    "entry-level",
+    "new-grad"
+  ],
+  "required_skills": [
+    "Python",
+    "SQL",
+    "Git"
+  ],
+  "notes": "Keep the first target brief focused on early-career roles and internships."
+}
