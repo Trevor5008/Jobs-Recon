@@ -1,0 +1,26 @@
+[
+  {
+    "source": "manual",
+    "source_url": "https://example.com/job/1",
+    "title": "Entry Level Software Engineer",
+    "company": "Example Co",
+    "location": "Atlanta, GA",
+    "description": "We are looking for Python, SQL, Git, and teamwork skills to build internal tools."
+  },
+  {
+    "source": "manual",
+    "source_url": "https://example.com/job/2",
+    "title": "Junior Data Analyst",
+    "company": "Northline Analytics",
+    "location": "Remote",
+    "description": "Analyze datasets with SQL, Excel, and Python. Strong communication required."
+  },
+  {
+    "source": "manual",
+    "source_url": "https://example.com/job/3",
+    "title": "Backend Developer Intern",
+    "company": "Cloud Harbor",
+    "location": "Atlanta, GA",
+    "description": "Work with Node.js, Docker, AWS, and Linux on API services. Git workflow experience helpful."
+  }
+]
