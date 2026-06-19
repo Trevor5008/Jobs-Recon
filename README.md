@@ -52,6 +52,39 @@ python -m jobs_recon source-feasibility --source handshake --output output/hands
 - Automated authenticated requests or bypassing access controls
 - Scheduler, database, frontend UI, or broad source plugin system
 
+## MVP 0.3
+
+MVP 0.3 answers one question:
+
+> Can the user define the scan scope before running a recon pass?
+
+Jobs Recon is still local-only. A target search brief lets you describe the role scope before generating a recon brief from local postings. The output explains which postings were included, which were skipped, and why.
+
+Title keywords and locations act as hard gates. Seniority and required skills are evidence signals or warnings, not a ranking engine.
+
+### Example target brief
+
+See `examples/target_brief.json` for the expected JSON shape.
+
+### Generate a scoped recon brief
+
+```bash
+python -m jobs_recon --input examples/sample_postings.json --target examples/target_brief.json --output output/recon_brief.md
+```
+
+Without a target brief, the MVP 0.1 command still works:
+
+```bash
+python -m jobs_recon --input examples/sample_postings.json --output output/recon_brief.md
+```
+
+### What MVP 0.3 does not do
+
+- Live fetching, scraping, or source ingestion
+- Handshake adapter work
+- Authentication, API integrations, or scheduling
+- Database, frontend UI, recommendation engine, or LLM integration
+
 ## Setup
 
 Requires Python 3.10+.

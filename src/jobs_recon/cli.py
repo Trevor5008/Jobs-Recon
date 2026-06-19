@@ -5,6 +5,7 @@ from pathlib import Path
 from jobs_recon.brief import generate_brief
 from jobs_recon.parser import load_postings
 from jobs_recon.source_feasibility import generate_feasibility_report, get_source_profile
+from jobs_recon.target import load_target_brief
 
 SOURCE_FEASIBILITY_COMMAND = "source-feasibility"
 
@@ -25,6 +26,11 @@ def build_brief_parser() -> argparse.ArgumentParser:
         required=True,
         type=Path,
         help="Path where the Markdown recon brief will be written.",
+    )
+    parser.add_argument(
+        "--target",
+        type=Path,
+        help="Optional path to a target brief JSON file that scopes the recon pass.",
     )
     return parser
 
@@ -69,7 +75,19 @@ def run_brief(argv: list[str]) -> int:
         print("Error: input file contains no postings.", file=sys.stderr)
         return 1
 
-    brief = generate_brief(postings)
+    target = None
+    if args.target is not None:
+        target_path: Path = args.target
+        if not target_path.is_file():
+            print(f"Error: target file not found: {target_path}", file=sys.stderr)
+            return 1
+        try:
+            target = load_target_brief(target_path)
+        except ValueError as exc:
+            print(f"Error: {exc}", file=sys.stderr)
+            return 1
+
+    brief = generate_brief(postings, target=target)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(brief, encoding="utf-8")
     print(f"Wrote recon brief to {output_path}")
