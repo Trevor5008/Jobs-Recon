@@ -1,0 +1,26 @@
+{
+  "name": "AI / Software Intern & Junior Roles — Miami / South Florida",
+  "role_family": "Software Engineering / AI",
+  "title_keywords": [
+    "AI Engineer",
+    "Machine Learning Engineer",
+    "AI Software Engineer",
+    "Software Engineer Intern"
+  ],
+  "locations": [
+    "Miami",
+    "South Florida",
+    "Remote"
+  ],
+  "remote_preference": "open_to_remote",
+  "seniority": [
+    "intern",
+    "junior",
+    "entry level"
+  ],
+  "required_skills": [
+    "Python",
+    "SQL"
+  ],
+  "notes": "MVP 0.3.1 discovery target for Google dork feasibility testing."
+}

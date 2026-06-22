@@ -9,6 +9,7 @@ from jobs_recon.parser import extract_skills, load_postings
 SAMPLE_PATH = Path(__file__).resolve().parents[1] / "examples" / "sample_postings.json"
 
 
+# Test that the parser accepts valid sample postings
 def test_parser_accepts_valid_sample_postings():
     postings = load_postings(SAMPLE_PATH)
     assert len(postings) == 3
@@ -18,6 +19,7 @@ def test_parser_accepts_valid_sample_postings():
     assert postings[0].source_url == "https://example.com/job/1"
 
 
+# Test that the parser rejects missing required fields
 def test_parser_rejects_missing_required_fields(tmp_path: Path):
     bad_data = [{"title": "Engineer", "company": "Acme"}]
     bad_file = tmp_path / "bad.json"
@@ -27,6 +29,7 @@ def test_parser_rejects_missing_required_fields(tmp_path: Path):
         load_postings(bad_file)
 
 
+# Test that skill extraction is deterministic and case-insensitive
 def test_skill_extraction_is_deterministic_and_case_insensitive():
     description = "Needs python, SQL, and GIT experience."
     first = extract_skills(description)
@@ -35,6 +38,7 @@ def test_skill_extraction_is_deterministic_and_case_insensitive():
     assert first == ["Python", "SQL", "Git"]
 
 
+# Test that the brief includes counts, skills, and posting details
 def test_brief_includes_counts_skills_and_posting_details():
     postings = load_postings(SAMPLE_PATH)
     brief = generate_brief(postings)
@@ -45,6 +49,7 @@ def test_brief_includes_counts_skills_and_posting_details():
     assert "https://example.com/job/1" in brief
 
 
+# Test that the CLI generates markdown output
 def test_cli_generates_markdown_output(tmp_path: Path):
     from jobs_recon.cli import main
 

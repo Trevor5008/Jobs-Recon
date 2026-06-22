@@ -1,0 +1,32 @@
+{
+  "kind": "customsearch#search",
+  "queries": {
+    "request": [
+      {
+        "title": "Google Custom Search - AI Engineer Miami",
+        "totalResults": "3",
+        "searchTerms": "site:greenhouse.io (\"AI Engineer\" OR \"Machine Learning Engineer\") (\"Miami\" OR \"Remote\")"
+      }
+    ]
+  },
+  "items": [
+    {
+      "title": "AI Engineer Intern - ExampleCo",
+      "link": "https://boards.greenhouse.io/exampleco/jobs/123456",
+      "displayLink": "boards.greenhouse.io",
+      "snippet": "Join ExampleCo as an AI Engineer Intern in Miami or remote."
+    },
+    {
+      "title": "Machine Learning Engineer - Indeed",
+      "link": "https://www.indeed.com/viewjob?jk=abc123",
+      "displayLink": "www.indeed.com",
+      "snippet": "Machine learning engineer opening listed on Indeed."
+    },
+    {
+      "title": "Software Engineer Intern | Acme Careers",
+      "link": "https://jobs.lever.co/acme/abc-def-ghi",
+      "displayLink": "jobs.lever.co",
+      "snippet": "Software Engineer Intern role on Lever for Miami-area candidates."
+    }
+  ]
+}
