@@ -17,7 +17,7 @@ API_FACT_PATTERNS = (
     "handshake api supports",
 )
 
-
+# Test that the handshake feasibility profile exists
 def test_handshake_feasibility_profile_exists():
     profile = handshake_profile()
 
@@ -30,16 +30,19 @@ def test_handshake_feasibility_profile_exists():
     assert profile.recommended_next_step
 
 
+# Test that the get_source_profile function accepts handshake as an alias
 def test_get_source_profile_accepts_handshake_alias():
     profile = get_source_profile("handshake")
     assert profile.source_name == "Handshake"
 
 
+# Test that the get_source_profile function rejects unknown sources
 def test_get_source_profile_rejects_unknown_source():
     with pytest.raises(ValueError, match="Unknown source"):
         get_source_profile("unknown-board")
 
 
+# Test that the markdown report includes required sections
 def test_markdown_report_includes_required_sections():
     report = generate_feasibility_report(handshake_profile())
 
@@ -51,6 +54,7 @@ def test_markdown_report_includes_required_sections():
     assert "direct adapter only if supported by terms and access model" in report
 
 
+# Test that the markdown report does not claim direct API support
 def test_markdown_report_does_not_claim_direct_api_support():
     report = generate_feasibility_report(handshake_profile()).lower()
 
@@ -61,6 +65,7 @@ def test_markdown_report_does_not_claim_direct_api_support():
     assert "unknown until terms/access are reviewed" in report
 
 
+# Test that the CLI writes feasibility markdown output
 def test_cli_writes_feasibility_markdown_output(tmp_path: Path):
     output_path = tmp_path / "handshake_feasibility.md"
     exit_code = main(

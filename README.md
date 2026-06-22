@@ -1,8 +1,10 @@
 # Jobs Recon
 
-Jobs Recon is a CLI-first job-market reconnaissance tool. It turns a small, local set of job postings into a short Markdown brief so you can decide what to focus on next.
+Jobs Recon is a CLI-first job-market reconnaissance tool. 
+- It turns a small, local set of job postings into a short Markdown brief so you can decide what to focus on next.
 
-This project is a smaller pivot from Jobs-Radar, which grew into a broader job-intelligence system. Jobs Recon stays intentionally narrow: parse local inputs, extract simple signals, and write one evidence-first brief.
+- This project is a smaller pivot from Jobs-Radar, which grew into a broader job-intelligence system. 
+- Jobs Recon stays intentionally narrow: parse local inputs, extract simple signals, and write one evidence-first brief.
 
 ## MVP 0.1
 
@@ -45,13 +47,6 @@ _Access may be login-gated, school-affiliated, or unsuitable for automation unti
 python -m jobs_recon source-feasibility --source handshake --output output/handshake_feasibility.md
 ```
 
-### What MVP 0.2 does not do
-
-- Handshake scraping or live ingestion
-- Browser automation, login/session handling, or credential storage
-- Automated authenticated requests or bypassing access controls
-- Scheduler, database, frontend UI, or broad source plugin system
-
 ## MVP 0.3
 
 MVP 0.3 answers one question:
@@ -84,6 +79,71 @@ python -m jobs_recon --input examples/sample_postings.json --output output/recon
 - Handshake adapter work
 - Authentication, API integrations, or scheduling
 - Database, frontend UI, recommendation engine, or LLM integration
+
+## MVP 0.3.1
+
+MVP 0.3.1 answers one question:
+
+> Can target-aware Google dorks discover useful public posting URLs without Jobs Recon becoming a scraper?
+
+This milestone is a **discovery feasibility spike**, not full ingestion. 
+- Jobs Recon can generate target-aware dork queries, optionally call the Google Custom Search JSON API when credentials are configured 
+- Classify candidate URLs by likely source type, and export a Markdown feasibility report.
+
+It does **not** scrape Google Jobs, run browser automation, bypass CAPTCHAs, or treat search snippets as complete job descriptions.
+
+### Example target brief for dorking
+
+See `examples/target-ai-engineer.json` for a Miami / South Florida AI and software intern/junior target.
+
+### Generate dork queries only (dry run)
+
+```bash
+python -m jobs_recon google-dorks --target examples/target-ai-engineer.json --dry-run
+```
+
+### Generate a feasibility report from fixture JSON (tests / offline)
+
+```bash
+python -m jobs_recon google-dorks \
+  --target examples/target-ai-engineer.json \
+  --fixture tests/fixtures/google_search_response.json \
+  --output output/google_dork_feasibility.md
+```
+
+### Run live Google JSON search (requires credentials)
+
+Set environment variables:
+
+- `GOOGLE_API_KEY` — Google API key with Custom Search API enabled
+- `GOOGLE_CSE_ID` — Programmable Search Engine ID (search engine cx value)
+
+```bash
+export GOOGLE_API_KEY="your-api-key"
+export GOOGLE_CSE_ID="your-cse-id"
+
+python -m jobs_recon google-dorks \
+  --target examples/target-ai-engineer.json \
+  --live \
+  --output output/google_dork_feasibility.md
+```
+
+If credentials are missing, `--live` exits with a clear error. Use `--dry-run` or `--fixture` instead.
+
+### Recommended workflow
+
+1. Generate target-aware dorks with `--dry-run`.
+2. Inspect JSON/search results manually or via `--fixture` output.
+3. Select promising canonical employer or ATS URLs (prefer Greenhouse, Lever, Ashby, Workable, and similar ATS domains over aggregators).
+4. Feed selected URLs or pasted posting text into Jobs Recon later for skill matching and brief generation.
+
+### What MVP 0.3.1 does not do
+
+- Google Jobs UI scraping or browser automation
+- CAPTCHA bypass, login/session automation, or broad crawling
+- LinkedIn or Handshake scraping
+- Ranking/recommendation logic or application tracking
+- Treating Google snippets as final posting evidence for skill matching
 
 ## Setup
 

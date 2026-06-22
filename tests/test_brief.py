@@ -1,7 +1,7 @@
 from jobs_recon.brief import generate_brief
 from jobs_recon.models import JobPosting
 
-
+# Test that the brief handles empty skill matches
 def test_brief_handles_empty_skill_matches():
     postings = [
         JobPosting(
@@ -19,6 +19,7 @@ def test_brief_handles_empty_skill_matches():
     assert "Matched skills: None" in brief
 
 
+# Test that the brief sorts skills by count then name
 def test_brief_sorts_skills_by_count_then_name():
     postings = [
         JobPosting(title="A", company="Co", description="Git", skills=["Git"]),
