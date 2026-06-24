@@ -3,15 +3,13 @@ import json
 import sys
 from pathlib import Path
 
+from dotenv import load_dotenv
+
 from jobs_recon.brief import generate_brief
-from jobs_recon.google_search import (
-    GoogleSearchConfigError,
-    fetch_google_search,
-    get_google_search_config,
-    load_google_search_fixture,
-)
+from jobs_recon.discovery_provider import GoogleGroundingProvider, ManualFixtureProvider
+from jobs_recon.google_grounding import GoogleGroundingConfigError
 from jobs_recon.parser import load_postings
-from jobs_recon.search_discovery import generate_dork_queries, parse_google_search_items
+from jobs_recon.search_discovery import summarize_target
 from jobs_recon.search_feasibility import (
     build_feasibility_run,
     generate_search_feasibility_report,
@@ -19,8 +17,10 @@ from jobs_recon.search_feasibility import (
 from jobs_recon.source_feasibility import generate_feasibility_report, get_source_profile
 from jobs_recon.target import load_target_brief
 
+load_dotenv()
+
 SOURCE_FEASIBILITY_COMMAND = "source-feasibility"
-GOOGLE_DORKS_COMMAND = "google-dorks"
+SEARCH_GROUNDING_COMMAND = "search-grounding"
 
 
 def build_brief_parser() -> argparse.ArgumentParser:
@@ -67,6 +67,46 @@ def build_source_feasibility_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def build_search_grounding_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog=f"jobs-recon {SEARCH_GROUNDING_COMMAND}",
+        description=(
+            "Generate target-aware grounded-search prompts and optionally evaluate "
+            "Gemini / Vertex Google Search grounding for discovery feasibility."
+        ),
+    )
+    parser.add_argument(
+        "--target",
+        required=True,
+        type=Path,
+        help="Path to a target brief JSON file used to generate discovery prompts.",
+    )
+    parser.add_argument(
+        "--output",
+        type=Path,
+        help="Path where the Markdown search feasibility report will be written.",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Generate discovery prompts only; do not load fixtures or call live grounding.",
+    )
+    parser.add_argument(
+        "--fixture",
+        type=Path,
+        help="Path to a saved grounded-response JSON fixture.",
+    )
+    parser.add_argument(
+        "--live",
+        action="store_true",
+        help=(
+            "Run live Gemini / Vertex Google Search grounding "
+            "(requires credentials and google-genai)."
+        ),
+    )
+    return parser
+
+
 def run_brief(argv: list[str]) -> int:
     parser = build_brief_parser()
     args = parser.parse_args(argv)
@@ -107,49 +147,18 @@ def run_brief(argv: list[str]) -> int:
     return 0
 
 
-def build_google_dorks_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        prog=f"jobs-recon {GOOGLE_DORKS_COMMAND}",
-        description=(
-            "Generate target-aware Google dorks and optionally evaluate Google "
-            "Custom Search JSON API results for discovery feasibility."
-        ),
-    )
-    parser.add_argument(
-        "--target",
-        required=True,
-        type=Path,
-        help="Path to a target brief JSON file used to generate dork queries.",
-    )
-    parser.add_argument(
-        "--output",
-        type=Path,
-        help="Path where the Markdown search feasibility report will be written.",
-    )
-    parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Generate dork queries only; do not load fixtures or call the live API.",
-    )
-    parser.add_argument(
-        "--fixture",
-        type=Path,
-        help="Path to a saved Google Custom Search JSON API response fixture.",
-    )
-    parser.add_argument(
-        "--live",
-        action="store_true",
-        help="Run live Google Custom Search JSON API requests (requires env credentials).",
-    )
-    return parser
-
-
-def run_google_dorks(argv: list[str]) -> int:
-    parser = build_google_dorks_parser()
+def run_search_grounding(argv: list[str]) -> int:
+    parser = build_search_grounding_parser()
     args = parser.parse_args(argv)
 
     if args.live and args.fixture is not None:
         print("Error: --live and --fixture cannot be used together.", file=sys.stderr)
+        return 1
+    if args.dry_run and args.fixture is not None:
+        print("Error: --dry-run and --fixture cannot be used together.", file=sys.stderr)
+        return 1
+    if args.dry_run and args.live:
+        print("Error: --dry-run and --live cannot be used together.", file=sys.stderr)
         return 1
 
     target_path: Path = args.target
@@ -163,18 +172,10 @@ def run_google_dorks(argv: list[str]) -> int:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
 
-    queries = generate_dork_queries(target)
-
-    if args.dry_run and args.fixture is not None:
-        print("Error: --dry-run and --fixture cannot be used together.", file=sys.stderr)
-        return 1
-
-    if args.dry_run and args.live:
-        print("Error: --dry-run and --live cannot be used together.", file=sys.stderr)
-        return 1
-
+    prompts = GoogleGroundingProvider().generate_queries(target)
     mode = "dry-run"
-    results = []
+    responses = []
+    provider_name = GoogleGroundingProvider.name
 
     if args.fixture is not None:
         fixture_path: Path = args.fixture
@@ -182,32 +183,28 @@ def run_google_dorks(argv: list[str]) -> int:
             print(f"Error: fixture file not found: {fixture_path}", file=sys.stderr)
             return 1
         try:
-            payload = load_google_search_fixture(str(fixture_path))
-            query_text = queries[0].query if queries else ""
-            results = parse_google_search_items(payload, query_text)
+            fixture_provider = ManualFixtureProvider(str(fixture_path))
+            provider_name = fixture_provider.name
+            responses = [fixture_provider.discover(prompt) for prompt in prompts[:1]]
             mode = "fixture"
         except (ValueError, json.JSONDecodeError, OSError) as exc:
             print(f"Error: {exc}", file=sys.stderr)
             return 1
     elif args.live:
         try:
-            api_key, cse_id = get_google_search_config()
-        except GoogleSearchConfigError as exc:
+            live_provider = GoogleGroundingProvider()
+            provider_name = live_provider.name
+        except GoogleGroundingConfigError as exc:
             print(f"Error: {exc}", file=sys.stderr)
             return 1
 
         mode = "live"
-        for search_query in queries:
+        for prompt in prompts[:1]:
             try:
-                payload = fetch_google_search(
-                    search_query.query,
-                    api_key=api_key,
-                    cse_id=cse_id,
-                )
-            except (RuntimeError, ValueError) as exc:
+                responses.append(live_provider.discover(prompt))
+            except (GoogleGroundingConfigError, RuntimeError, ValueError) as exc:
                 print(f"Error: {exc}", file=sys.stderr)
                 return 1
-            results.extend(parse_google_search_items(payload, search_query.query))
     elif not args.dry_run:
         if args.output is None:
             print(
@@ -218,9 +215,12 @@ def run_google_dorks(argv: list[str]) -> int:
 
     run = build_feasibility_run(
         target_name=target.name,
-        queries=queries,
-        results=results,
+        target_summary=summarize_target(target),
+        target_path=str(target_path),
+        prompts=prompts,
+        responses=responses,
         mode=mode,
+        provider=provider_name,
     )
     report = generate_search_feasibility_report(run)
 
@@ -230,15 +230,15 @@ def run_google_dorks(argv: list[str]) -> int:
         output_path.write_text(report, encoding="utf-8")
         print(f"Wrote search feasibility report to {output_path}")
     elif args.dry_run:
-        for index, search_query in enumerate(queries, start=1):
-            print(f"Query {index} ({search_query.label}):")
-            print(search_query.query)
+        for index, discovery_prompt in enumerate(prompts, start=1):
+            print(f"Prompt {index} ({discovery_prompt.label}):")
+            print(discovery_prompt.prompt)
             print()
     else:
         print(report)
 
     if args.dry_run:
-        print(f"Generated {len(queries)} dork quer{'y' if len(queries) == 1 else 'ies'}.")
+        print(f"Generated {len(prompts)} discovery prompt(s).")
 
     return 0
 
@@ -267,8 +267,8 @@ def main(argv: list[str] | None = None) -> int:
     if argv and argv[0] == SOURCE_FEASIBILITY_COMMAND:
         return run_source_feasibility(argv[1:])
 
-    if argv and argv[0] == GOOGLE_DORKS_COMMAND:
-        return run_google_dorks(argv[1:])
+    if argv and argv[0] == SEARCH_GROUNDING_COMMAND:
+        return run_search_grounding(argv[1:])
 
     return run_brief(argv)
 

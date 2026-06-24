@@ -3,23 +3,23 @@ from pathlib import Path
 import pytest
 
 from jobs_recon.cli import main
-from jobs_recon.google_search import (
-    GoogleSearchConfigError,
-    get_google_search_config,
-    google_search_configured,
-    load_google_search_fixture,
+from jobs_recon.google_grounding import (
+    GoogleGroundingConfigError,
+    get_google_grounding_config,
+    google_grounding_configured,
+    load_grounding_fixture,
 )
 from jobs_recon.models import TargetBrief
 from jobs_recon.search_discovery import (
     SOURCE_TYPE_AGGREGATOR,
     SOURCE_TYPE_ATS,
     SOURCE_TYPE_EMPLOYER,
-    SOURCE_TYPE_GOOGLE_SURFACE,
     SOURCE_TYPE_IRRELEVANT,
+    SOURCE_TYPE_SEARCH_SURFACE,
     classify_result_url,
-    generate_dork_queries,
-    parse_google_search_items,
-    promising_results,
+    generate_discovery_prompts,
+    normalize_grounded_response,
+    promising_citations,
 )
 from jobs_recon.search_feasibility import (
     assess_viability,
@@ -31,36 +31,35 @@ from jobs_recon.target import load_target_brief
 EXAMPLES_DIR = Path(__file__).resolve().parents[1] / "examples"
 FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures"
 TARGET_AI_PATH = EXAMPLES_DIR / "target-ai-engineer.json"
-GOOGLE_FIXTURE_PATH = FIXTURES_DIR / "google_search_response.json"
+GROUNDING_FIXTURE_PATH = FIXTURES_DIR / "google_grounding_response.json"
 SAMPLE_PATH = EXAMPLES_DIR / "sample_postings.json"
 TARGET_PATH = EXAMPLES_DIR / "target_brief.json"
 
-# TODO: remove this test once Google search is implemented
-def test_generate_dork_queries_from_target_brief():
+
+def test_generate_discovery_prompts_from_target_brief():
     target = load_target_brief(TARGET_AI_PATH)
-    queries = generate_dork_queries(target)
+    prompts = generate_discovery_prompts(target)
 
-    assert len(queries) >= 5
-    general = queries[0]
-    assert '"AI Engineer"' in general.query
-    assert '"Machine Learning Engineer"' in general.query
-    assert "intern" in general.query or "junior" in general.query
-    assert "Miami" in general.query
-    assert "site:greenhouse.io" in queries[1].query
-    assert "site:jobs.lever.co" in queries[2].query
+    assert len(prompts) >= 5
+    general = prompts[0]
+    assert "AI Engineer" in general.prompt
+    assert "Machine Learning Engineer" in general.prompt
+    assert "intern" in general.prompt or "junior" in general.prompt
+    assert "Miami" in general.prompt
+    assert "Greenhouse" in prompts[1].prompt
+    assert "Lever" in prompts[2].prompt
+    assert "canonical employer career pages" in general.prompt
 
 
-# TODO: remove this test once Google search is implemented
-def test_generate_dork_queries_handles_minimal_target():
+def test_generate_discovery_prompts_handles_minimal_target():
     target = TargetBrief(name="Minimal", title_keywords=["Engineer"], locations=["Remote"])
-    queries = generate_dork_queries(target)
+    prompts = generate_discovery_prompts(target)
 
-    assert len(queries) >= 1
-    assert "Engineer" in queries[0].query
-    assert "Remote" in queries[0].query
+    assert len(prompts) >= 1
+    assert "Engineer" in prompts[0].prompt
+    assert "Remote" in prompts[0].prompt
 
 
-# TODO: remove this test once Google search is implemented
 @pytest.mark.parametrize(
     ("url", "expected"),
     [
@@ -70,90 +69,86 @@ def test_generate_dork_queries_handles_minimal_target():
         ("https://apply.workable.com/acme/j/ABC", SOURCE_TYPE_ATS),
         ("https://www.indeed.com/viewjob?jk=abc", SOURCE_TYPE_AGGREGATOR),
         ("https://www.linkedin.com/jobs/view/123", SOURCE_TYPE_AGGREGATOR),
-        ("https://www.google.com/search?q=jobs", SOURCE_TYPE_GOOGLE_SURFACE),
+        ("https://www.google.com/search?q=jobs", SOURCE_TYPE_SEARCH_SURFACE),
         ("https://careers.example.com/jobs/ai-engineer", SOURCE_TYPE_EMPLOYER),
         ("", SOURCE_TYPE_IRRELEVANT),
     ],
 )
-
-
-# TODO: remove this test once Google search is implemented
 def test_classify_result_url(url: str, expected: str):
     assert classify_result_url(url) == expected
 
 
-# TODO: remove this test once Google search is implemented
-def test_parse_google_search_fixture_results():
-    payload = load_google_search_fixture(str(GOOGLE_FIXTURE_PATH))
-    query = 'site:greenhouse.io ("AI Engineer") ("Miami" OR "Remote")'
-    results = parse_google_search_items(payload, query)
+def test_parse_grounding_fixture_results():
+    payload = load_grounding_fixture(str(GROUNDING_FIXTURE_PATH))
+    prompt = "Find current public job postings for intern AI/software roles around Miami."
+    response = normalize_grounded_response(payload, prompt)
 
-    assert len(results) == 3
-    assert results[0].source_type == SOURCE_TYPE_ATS
-    assert results[0].title == "AI Engineer Intern - ExampleCo"
-    assert results[1].source_type == SOURCE_TYPE_AGGREGATOR
-    assert results[2].source_type == SOURCE_TYPE_ATS
-    assert all(result.query == query for result in results)
-    assert all(result.provider == "google_custom_search_json" for result in results)
+    assert response.response_text
+    assert len(response.citations) == 3
+    assert response.citations[0].source_type == SOURCE_TYPE_ATS
+    assert response.citations[1].source_type == SOURCE_TYPE_AGGREGATOR
+    assert response.citations[2].source_type == SOURCE_TYPE_ATS
+    assert response.model == "gemini-2.5-flash"
+    assert response.grounding_metadata is not None
 
 
-# TODO: remove this test once Google search is implemented
-def test_promising_results_prefers_ats_over_aggregators():
-    payload = load_google_search_fixture(str(GOOGLE_FIXTURE_PATH))
-    results = parse_google_search_items(payload, "test query")
-    promising = promising_results(results)
+def test_promising_citations_prefers_ats_over_aggregators():
+    payload = load_grounding_fixture(str(GROUNDING_FIXTURE_PATH))
+    response = normalize_grounded_response(payload, "test prompt")
+    promising = promising_citations(response.citations)
 
     assert len(promising) == 2
-    assert all(result.source_type == SOURCE_TYPE_ATS for result in promising)
+    assert all(citation.source_type == SOURCE_TYPE_ATS for citation in promising)
 
 
-# TODO: remove this test once Google search is implemented
 def test_search_feasibility_report_includes_required_sections():
     target = load_target_brief(TARGET_AI_PATH)
-    queries = generate_dork_queries(target)
-    payload = load_google_search_fixture(str(GOOGLE_FIXTURE_PATH))
-    results = parse_google_search_items(payload, queries[0].query)
+    prompts = generate_discovery_prompts(target)
+    payload = load_grounding_fixture(str(GROUNDING_FIXTURE_PATH))
+    response = normalize_grounded_response(payload, prompts[0].prompt)
     run = build_feasibility_run(
         target_name=target.name,
-        queries=queries,
-        results=results,
+        target_summary="AI / software intern roles",
+        target_path=str(TARGET_AI_PATH),
+        prompts=prompts,
+        responses=[response],
         mode="fixture",
     )
     report = generate_search_feasibility_report(run)
 
-    assert "# Search Feasibility Report: Google Dorking / JSON Search" in report
-    assert "## Queries Tested" in report
-    assert "## Result Counts" in report
+    assert "# Search Feasibility Report: Google Search Grounding" in report
+    assert "## Prompts Tested" in report
+    assert "## Citation Counts" in report
     assert "## Promising URLs" in report
     assert "## Important Limitations" in report
     assert "does **not** scrape Google Jobs" in report
-    assert "snippets are discovery evidence only" in report
+    assert "discovery evidence only" in report
     assert "boards.greenhouse.io" in report
+    assert "Google Custom Search JSON API are out of scope" in report
 
-# TODO: remove this test once Google search is implemented
+
 def test_assess_viability_with_fixture_results():
-    payload = load_google_search_fixture(str(GOOGLE_FIXTURE_PATH))
-    results = parse_google_search_items(payload, "test")
-    verdict, _ = assess_viability(results)
+    payload = load_grounding_fixture(str(GROUNDING_FIXTURE_PATH))
+    response = normalize_grounded_response(payload, "test")
+    verdict, _ = assess_viability(response.citations)
 
     assert verdict == "promising"
 
 
-# TODO: remove this test once Google search is implemented
-def test_missing_api_credentials_raise_clear_error(monkeypatch):
+def test_missing_grounding_credentials_raise_clear_error(monkeypatch):
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
     monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
-    monkeypatch.delenv("GOOGLE_CSE_ID", raising=False)
+    monkeypatch.delenv("GOOGLE_GENAI_USE_VERTEXAI", raising=False)
 
-    assert google_search_configured() is False
-    with pytest.raises(GoogleSearchConfigError, match="GOOGLE_API_KEY"):
-        get_google_search_config()
+    assert google_grounding_configured() is False
+    with pytest.raises(GoogleGroundingConfigError, match="GEMINI_API_KEY"):
+        get_google_grounding_config()
 
 
-# TODO: remove this test once Google search is implemented
-def test_cli_google_dorks_dry_run_prints_queries(capsys):
+def test_cli_search_grounding_dry_run_prints_prompts(capsys):
     exit_code = main(
         [
-            "google-dorks",
+            "search-grounding",
             "--target",
             str(TARGET_AI_PATH),
             "--dry-run",
@@ -162,20 +157,19 @@ def test_cli_google_dorks_dry_run_prints_queries(capsys):
 
     assert exit_code == 0
     captured = capsys.readouterr()
-    assert "site:greenhouse.io" in captured.out
+    assert "Greenhouse" in captured.out
     assert "Generated" in captured.out
 
 
-# TODO: remove this test once Google search is implemented
-def test_cli_google_dorks_fixture_writes_report(tmp_path: Path):
-    output_path = tmp_path / "google_dork_feasibility.md"
+def test_cli_search_grounding_fixture_writes_report(tmp_path: Path):
+    output_path = tmp_path / "google_grounding_feasibility.md"
     exit_code = main(
         [
-            "google-dorks",
+            "search-grounding",
             "--target",
             str(TARGET_AI_PATH),
             "--fixture",
-            str(GOOGLE_FIXTURE_PATH),
+            str(GROUNDING_FIXTURE_PATH),
             "--output",
             str(output_path),
         ]
@@ -187,15 +181,15 @@ def test_cli_google_dorks_fixture_writes_report(tmp_path: Path):
     assert "jobs.lever.co" in content
 
 
-# TODO: remove this test once Google search is implemented
 def test_cli_live_without_credentials_returns_nonzero(monkeypatch, tmp_path: Path):
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
     monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
-    monkeypatch.delenv("GOOGLE_CSE_ID", raising=False)
+    monkeypatch.delenv("GOOGLE_GENAI_USE_VERTEXAI", raising=False)
 
-    output_path = tmp_path / "google_dork_feasibility.md"
+    output_path = tmp_path / "google_grounding_feasibility.md"
     exit_code = main(
         [
-            "google-dorks",
+            "search-grounding",
             "--target",
             str(TARGET_AI_PATH),
             "--live",
@@ -208,7 +202,6 @@ def test_cli_live_without_credentials_returns_nonzero(monkeypatch, tmp_path: Pat
     assert not output_path.exists()
 
 
-# TODO: remove this test once Google search is implemented
 def test_existing_brief_command_still_works(tmp_path: Path):
     output_path = tmp_path / "recon_brief.md"
     exit_code = main(["--input", str(SAMPLE_PATH), "--output", str(output_path)])
@@ -217,7 +210,6 @@ def test_existing_brief_command_still_works(tmp_path: Path):
     assert "Postings analyzed: 3" in output_path.read_text(encoding="utf-8")
 
 
-# TODO: remove this test once Google search is implemented
 def test_existing_source_feasibility_command_still_works(tmp_path: Path):
     output_path = tmp_path / "handshake_feasibility.md"
     exit_code = main(
@@ -234,7 +226,6 @@ def test_existing_source_feasibility_command_still_works(tmp_path: Path):
     assert "Source Feasibility Report: Handshake" in output_path.read_text(encoding="utf-8")
 
 
-# TODO: remove this test once Google search is implemented
 def test_existing_target_aware_brief_command_still_works(tmp_path: Path):
     output_path = tmp_path / "recon_brief.md"
     exit_code = main(

@@ -4,10 +4,11 @@ version = "0.3.1"
 description = "CLI-first job-market reconnaissance tool"
 readme = "README.md"
 requires-python = ">=3.10"
-dependencies = []
+dependencies = ["python-dotenv>=1.0"]
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0"]
+grounding = ["google-genai>=1.0"]
 
 [project.scripts]
 jobs-recon = "jobs_recon.cli:main"
@@ -19,3 +20,7 @@ build-backend = "hatchling.build"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+
+[tool.basedpyright]
+venvPath = "."
+venv = ".venv"

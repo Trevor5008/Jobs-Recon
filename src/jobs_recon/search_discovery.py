@@ -1,24 +1,32 @@
-"""Target-aware search query generation and result URL classification."""
+"""Target-aware discovery prompts and source URL classification."""
 
 from dataclasses import dataclass, field
 from urllib.parse import urlparse
 
 from jobs_recon.models import TargetBrief
 
-SEARCH_PROVIDER_GOOGLE = "google_custom_search_json"
+PROVIDER_GOOGLE_GROUNDING = "google_grounding"
+PROVIDER_MANUAL_FIXTURE = "manual_fixture"
 
 SOURCE_TYPE_ATS = "ats"
 SOURCE_TYPE_EMPLOYER = "employer"
 SOURCE_TYPE_AGGREGATOR = "aggregator"
-SOURCE_TYPE_GOOGLE_SURFACE = "google_jobs_or_search_surface"
+SOURCE_TYPE_SEARCH_SURFACE = "search_surface"
 SOURCE_TYPE_IRRELEVANT = "irrelevant"
 SOURCE_TYPE_UNKNOWN = "unknown"
 
 PREFERRED_SOURCE_TYPES = (SOURCE_TYPE_ATS, SOURCE_TYPE_EMPLOYER)
 DEPRIORITIZED_SOURCE_TYPES = (
     SOURCE_TYPE_AGGREGATOR,
-    SOURCE_TYPE_GOOGLE_SURFACE,
+    SOURCE_TYPE_SEARCH_SURFACE,
     SOURCE_TYPE_IRRELEVANT,
+)
+
+CANONICAL_ATS_GUIDANCE = (
+    "Prefer canonical employer career pages and public ATS pages such as Greenhouse, "
+    "Lever, Ashby, Workable, SmartRecruiters, BambooHR, JazzHR, or Workday. Avoid "
+    "treating LinkedIn, Indeed, Handshake, or Google Jobs panels as canonical sources. "
+    "Return source URLs where possible."
 )
 
 ATS_DOMAIN_PATTERNS: tuple[tuple[str, ...], ...] = (
@@ -43,109 +51,102 @@ AGGREGATOR_DOMAIN_PATTERNS: tuple[tuple[str, ...], ...] = (
     ("app.joinhandshake.com",),
 )
 
-GOOGLE_SURFACE_DOMAIN_PATTERNS: tuple[tuple[str, ...], ...] = (
+SEARCH_SURFACE_DOMAIN_PATTERNS: tuple[tuple[str, ...], ...] = (
     ("google.com", "search"),
     ("google.com", "about", "careers", "search"),
     ("jobs.google.com",),
 )
 
-SITE_SPECIFIC_DORKS: tuple[tuple[str, str], ...] = (
-    ("greenhouse.io", "Greenhouse ATS postings"),
-    ("jobs.lever.co", "Lever ATS postings"),
-    ("ashbyhq.com", "Ashby ATS postings"),
-    ("workable.com", "Workable ATS postings"),
+SITE_SPECIFIC_PROMPTS: tuple[tuple[str, str], ...] = (
+    ("Greenhouse (greenhouse.io / boards.greenhouse.io)", "Greenhouse ATS discovery"),
+    ("Lever (jobs.lever.co)", "Lever ATS discovery"),
+    ("Ashby (ashbyhq.com)", "Ashby ATS discovery"),
+    ("Workable (workable.com)", "Workable ATS discovery"),
 )
 
 
 @dataclass(frozen=True)
-class SearchQuery:
-    query: str
+class DiscoveryPrompt:
+    prompt: str
     label: str
 
 
 @dataclass
-class SearchResult:
-    query: str
-    title: str
+class DiscoveryCitation:
     url: str
-    snippet: str
-    display_link: str | None = None
-    provider: str = SEARCH_PROVIDER_GOOGLE
+    title: str | None = None
+    snippet: str | None = None
     source_type: str = SOURCE_TYPE_UNKNOWN
-
-    def with_classification(self, source_type: str) -> "SearchResult":
-        self.source_type = source_type
-        return self
 
 
 @dataclass
-class SearchFeasibilityRun:
+class DiscoveryResponse:
+    provider: str
+    model: str | None
+    prompt: str
+    response_text: str
+    citations: list[DiscoveryCitation] = field(default_factory=list)
+    grounding_metadata: dict | None = None
+    timestamp: str | None = None
+
+
+@dataclass
+class DiscoveryFeasibilityRun:
     target_name: str
-    queries: list[SearchQuery] = field(default_factory=list)
-    results: list[SearchResult] = field(default_factory=list)
+    target_summary: str
+    target_path: str | None
+    prompts: list[DiscoveryPrompt] = field(default_factory=list)
+    responses: list[DiscoveryResponse] = field(default_factory=list)
     mode: str = "dry-run"
-    provider: str = SEARCH_PROVIDER_GOOGLE
+    provider: str = PROVIDER_GOOGLE_GROUNDING
 
 
-def _quote_phrase(value: str) -> str:
-    cleaned = value.strip()
-    if not cleaned:
-        return ""
-    if " " in cleaned or '"' in cleaned:
-        escaped = cleaned.replace('"', "")
-        return f'"{escaped}"'
-    return cleaned
+def summarize_target(target: TargetBrief) -> str:
+    """Build a short target summary for provenance in reports."""
+    lines = [f"Name: {target.name}"]
+    if target.role_family:
+        lines.append(f"Role family: {target.role_family}")
+    if target.title_keywords:
+        lines.append(f"Title keywords: {', '.join(target.title_keywords)}")
+    if target.locations:
+        lines.append(f"Locations: {', '.join(target.locations)}")
+    if target.seniority:
+        lines.append(f"Seniority: {', '.join(target.seniority)}")
+    if target.required_skills:
+        lines.append(f"Required skills: {', '.join(target.required_skills)}")
+    return "; ".join(lines)
 
 
-def _or_group(values: list[str]) -> str:
-    phrases = [_quote_phrase(value) for value in values if value.strip()]
-    if not phrases:
-        return ""
-    if len(phrases) == 1:
-        return phrases[0]
-    return f"({' OR '.join(phrases)})"
+def generate_discovery_prompts(target: TargetBrief) -> list[DiscoveryPrompt]:
+    """Build deterministic grounded-search prompts from a target brief."""
+    title_keywords = ", ".join(target.title_keywords) or "AI/software roles"
+    locations = ", ".join(target.locations) or "any listed location"
+    seniority = ", ".join(target.seniority) or "entry-level, junior, or intern"
 
-
-def generate_dork_queries(target: TargetBrief) -> list[SearchQuery]:
-    """Build deterministic Google dork queries from a target brief."""
-    title_group = _or_group(target.title_keywords)
-    seniority_group = _or_group(target.seniority)
-    location_group = _or_group(target.locations)
-
-    core_parts = [part for part in (title_group, seniority_group, location_group) if part]
-    queries: list[SearchQuery] = []
-
-    if core_parts:
-        queries.append(
-            SearchQuery(
-                query=" ".join(core_parts),
-                label="General target-aware dork",
-            )
+    prompts: list[DiscoveryPrompt] = [
+        DiscoveryPrompt(
+            prompt=(
+                f"Find current public job postings for {seniority} AI/software roles "
+                f"matching titles such as {title_keywords} around {locations}. "
+                f"{CANONICAL_ATS_GUIDANCE}"
+            ),
+            label="General grounded discovery prompt",
         )
+    ]
 
-    site_parts = [part for part in (title_group, location_group) if part]
-    if site_parts:
-        site_query_body = " ".join(site_parts)
-        for domain, label in SITE_SPECIFIC_DORKS:
-            queries.append(
-                SearchQuery(
-                    query=f"site:{domain} {site_query_body}",
-                    label=label,
-                )
-            )
-
-    if target.seniority and title_group and location_group:
-        queries.append(
-            SearchQuery(
-                query=(
-                    f"site:ashbyhq.com {title_group} {seniority_group} "
-                    f"{location_group}"
+    for platform, label in SITE_SPECIFIC_PROMPTS:
+        prompts.append(
+            DiscoveryPrompt(
+                prompt=(
+                    f"Find current public job postings for {title_keywords} on {platform} "
+                    f"around {locations}, focusing on {seniority} roles. "
+                    f"{CANONICAL_ATS_GUIDANCE}"
                 ),
-                label="Ashby ATS with seniority lane",
+                label=label,
             )
         )
 
-    return queries
+    return prompts
 
 
 def _normalized_host(url: str) -> str:
@@ -190,9 +191,9 @@ def classify_result_url(url: str) -> str:
     if not host:
         return SOURCE_TYPE_UNKNOWN
 
-    for pattern in GOOGLE_SURFACE_DOMAIN_PATTERNS:
+    for pattern in SEARCH_SURFACE_DOMAIN_PATTERNS:
         if _host_matches_pattern(host, pattern) and _path_matches_pattern(path_segments, pattern):
-            return SOURCE_TYPE_GOOGLE_SURFACE
+            return SOURCE_TYPE_SEARCH_SURFACE
 
     for pattern in AGGREGATOR_DOMAIN_PATTERNS:
         if _host_matches_pattern(host, pattern) and _path_matches_pattern(path_segments, pattern):
@@ -208,51 +209,137 @@ def classify_result_url(url: str) -> str:
     return SOURCE_TYPE_UNKNOWN
 
 
-def classify_search_results(results: list[SearchResult]) -> list[SearchResult]:
-    """Attach source_type classification to each search result."""
-    for result in results:
-        result.source_type = classify_result_url(result.url)
-    return results
+def classify_citations(citations: list[DiscoveryCitation]) -> list[DiscoveryCitation]:
+    for citation in citations:
+        citation.source_type = classify_result_url(citation.url)
+    return citations
 
 
-def parse_google_search_items(
+def _citation_from_mapping(data: dict) -> DiscoveryCitation | None:
+    url = data.get("url") or data.get("uri") or data.get("link")
+    if not isinstance(url, str) or not url.strip():
+        return None
+    title = data.get("title")
+    snippet = data.get("snippet")
+    return DiscoveryCitation(
+        url=url,
+        title=title if isinstance(title, str) else None,
+        snippet=snippet if isinstance(snippet, str) else None,
+    )
+
+
+def _extract_grounding_metadata(payload: dict) -> dict | None:
+    metadata = payload.get("grounding_metadata") or payload.get("groundingMetadata")
+    return metadata if isinstance(metadata, dict) else None
+
+
+def _citations_from_grounding_metadata(metadata: dict) -> list[DiscoveryCitation]:
+    chunks = metadata.get("grounding_chunks") or metadata.get("groundingChunks") or []
+    if not isinstance(chunks, list):
+        return []
+
+    citations: list[DiscoveryCitation] = []
+    for chunk in chunks:
+        if not isinstance(chunk, dict):
+            continue
+        web = chunk.get("web")
+        if not isinstance(web, dict):
+            continue
+        citation = _citation_from_mapping(web)
+        if citation is not None:
+            citations.append(citation)
+    return citations
+
+
+def _response_text_from_payload(payload: dict) -> str:
+    if isinstance(payload.get("response_text"), str):
+        return payload["response_text"]
+
+    candidates = payload.get("candidates")
+    if not isinstance(candidates, list) or not candidates:
+        return ""
+
+    first = candidates[0]
+    if not isinstance(first, dict):
+        return ""
+
+    content = first.get("content")
+    if not isinstance(content, dict):
+        return ""
+
+    parts = content.get("parts")
+    if not isinstance(parts, list):
+        return ""
+
+    text_parts: list[str] = []
+    for part in parts:
+        if isinstance(part, dict) and isinstance(part.get("text"), str):
+            text_parts.append(part["text"])
+    return "\n".join(text_parts)
+
+
+def normalize_grounded_response(
     payload: dict,
-    query: str,
+    prompt: str,
     *,
-    provider: str = SEARCH_PROVIDER_GOOGLE,
-) -> list[SearchResult]:
-    """Parse a Google Custom Search JSON API response into SearchResult rows."""
-    items = payload.get("items") or []
-    if not isinstance(items, list):
-        raise ValueError("Google search response items must be a list")
+    provider: str = PROVIDER_GOOGLE_GROUNDING,
+    model: str | None = None,
+    timestamp: str | None = None,
+) -> DiscoveryResponse:
+    """Normalize fixture or Gemini API JSON into a DiscoveryResponse."""
+    if not isinstance(payload, dict):
+        raise ValueError("Grounded response payload must be a JSON object")
 
-    results: list[SearchResult] = []
-    for item in items:
-        if not isinstance(item, dict):
-            continue
-        url = item.get("link")
-        title = item.get("title")
-        if not isinstance(url, str) or not isinstance(title, str):
-            continue
-        snippet = item.get("snippet")
-        display_link = item.get("displayLink")
-        results.append(
-            SearchResult(
-                query=query,
-                title=title,
-                url=url,
-                snippet=snippet if isinstance(snippet, str) else "",
-                display_link=display_link if isinstance(display_link, str) else None,
-                provider=provider,
-            )
-        )
+    response_text = _response_text_from_payload(payload)
+    grounding_metadata = _extract_grounding_metadata(payload)
 
-    return classify_search_results(results)
+    citations: list[DiscoveryCitation] = []
+    raw_citations = payload.get("citations")
+    if isinstance(raw_citations, list):
+        for item in raw_citations:
+            if isinstance(item, dict):
+                citation = _citation_from_mapping(item)
+                if citation is not None:
+                    citations.append(citation)
+
+    if not citations and grounding_metadata is not None:
+        citations = _citations_from_grounding_metadata(grounding_metadata)
+
+    classify_citations(citations)
+
+    resolved_model = payload.get("model")
+    if not isinstance(resolved_model, str):
+        resolved_model = model
+
+    resolved_timestamp = payload.get("timestamp")
+    if not isinstance(resolved_timestamp, str):
+        resolved_timestamp = timestamp
+
+    return DiscoveryResponse(
+        provider=provider,
+        model=resolved_model,
+        prompt=prompt,
+        response_text=response_text,
+        citations=citations,
+        grounding_metadata=grounding_metadata,
+        timestamp=resolved_timestamp,
+    )
 
 
-def promising_results(results: list[SearchResult]) -> list[SearchResult]:
+def all_citations(responses: list[DiscoveryResponse]) -> list[DiscoveryCitation]:
+    citations: list[DiscoveryCitation] = []
+    for response in responses:
+        citations.extend(response.citations)
+    return citations
+
+
+def promising_citations(citations: list[DiscoveryCitation]) -> list[DiscoveryCitation]:
     """Prefer canonical ATS/employer URLs over aggregators and search surfaces."""
-    preferred = [result for result in results if result.source_type in PREFERRED_SOURCE_TYPES]
+    preferred = [citation for citation in citations if citation.source_type in PREFERRED_SOURCE_TYPES]
     if preferred:
         return preferred
-    return [result for result in results if result.source_type not in DEPRIORITIZED_SOURCE_TYPES]
+    return [
+        citation
+        for citation in citations
+        if citation.source_type not in DEPRIORITIZED_SOURCE_TYPES
+    ]
