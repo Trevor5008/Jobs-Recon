@@ -1,32 +1,34 @@
-"""Markdown feasibility report for Google dork / JSON search discovery."""
+"""Markdown feasibility report for search grounding discovery."""
 
+import json
 from collections import Counter
 
 from jobs_recon.search_discovery import (
     DEPRIORITIZED_SOURCE_TYPES,
     PREFERRED_SOURCE_TYPES,
-    SEARCH_PROVIDER_GOOGLE,
-    SearchFeasibilityRun,
-    SearchQuery,
-    SearchResult,
-    promising_results,
+    PROVIDER_GOOGLE_GROUNDING,
+    DiscoveryFeasibilityRun,
+    DiscoveryPrompt,
+    DiscoveryResponse,
+    all_citations,
+    promising_citations,
 )
 
 
-def _count_by_source_type(results: list[SearchResult]) -> Counter[str]:
-    return Counter(result.source_type for result in results)
+def _count_by_source_type(citations) -> Counter[str]:
+    return Counter(citation.source_type for citation in citations)
 
 
-def assess_viability(results: list[SearchResult]) -> tuple[str, str]:
+def assess_viability(citations) -> tuple[str, str]:
     """Return (verdict, rationale) for whether this discovery path looks viable."""
-    if not results:
+    if not citations:
         return (
             "inconclusive",
-            "No search results were available to evaluate. Generate dorks and inspect "
-            "fixture or live JSON output before deciding.",
+            "No cited URLs were available to evaluate. Generate prompts and inspect "
+            "fixture or live grounding output before deciding.",
         )
 
-    counts = _count_by_source_type(results)
+    counts = _count_by_source_type(citations)
     preferred_count = sum(counts.get(source_type, 0) for source_type in PREFERRED_SOURCE_TYPES)
     deprioritized_count = sum(
         counts.get(source_type, 0) for source_type in DEPRIORITIZED_SOURCE_TYPES
@@ -36,20 +38,20 @@ def assess_viability(results: list[SearchResult]) -> tuple[str, str]:
         return (
             "promising",
             "At least one ATS or employer URL appeared, and preferred URLs were not "
-            "outnumbered by aggregators or Google search surfaces.",
+            "outnumbered by aggregators or search surfaces.",
         )
 
     if preferred_count >= 1:
         return (
             "mixed",
-            "Some ATS or employer URLs appeared, but aggregators or Google search "
-            "surfaces were also common. Treat results as triage-only.",
+            "Some ATS or employer URLs appeared, but aggregators or search surfaces "
+            "were also common. Treat results as triage-only.",
         )
 
     if deprioritized_count >= 1:
         return (
             "weak",
-            "Results skewed toward aggregators or Google search surfaces rather than "
+            "Results skewed toward aggregators or search surfaces rather than "
             "canonical employer or ATS posting URLs.",
         )
 
@@ -60,60 +62,71 @@ def assess_viability(results: list[SearchResult]) -> tuple[str, str]:
     )
 
 
-def generate_search_feasibility_report(run: SearchFeasibilityRun) -> str:
-    """Build a deterministic Markdown feasibility report for search discovery."""
-    verdict, rationale = assess_viability(run.results)
-    counts = _count_by_source_type(run.results)
-    promising = promising_results(run.results)
+def generate_search_feasibility_report(run: DiscoveryFeasibilityRun) -> str:
+    """Build a deterministic Markdown feasibility report for search grounding."""
+    citations = all_citations(run.responses)
+    verdict, rationale = assess_viability(citations)
+    counts = _count_by_source_type(citations)
+    promising = promising_citations(citations)
 
     lines: list[str] = [
-        "# Search Feasibility Report: Google Dorking / JSON Search",
+        "# Search Feasibility Report: Google Search Grounding",
         "",
         "## Summary",
         "",
         f"- Target: {run.target_name}",
-        f"- Mode: {run.mode}",
-        f"- Search provider: {run.provider}",
-        f"- Queries tested: {len(run.queries)}",
-        f"- Results captured: {len(run.results)}",
-        f"- Viability verdict: **{verdict}**",
-        "",
-        rationale,
-        "",
-        "## Important Limitations",
-        "",
-        "- This workflow does **not** scrape Google Jobs or run browser automation.",
-        "- Google JSON API snippets are discovery evidence only, not complete job descriptions.",
-        "- Do not use snippets for skill matching or eligibility decisions unless a full posting "
-        "is later imported into Jobs Recon.",
-        "- CAPTCHA bypass, login automation, and broad crawling are out of scope.",
-        "",
-        "## Queries Tested",
-        "",
+        f"- Target summary: {run.target_summary}",
     ]
 
-    if run.queries:
-        for index, search_query in enumerate(run.queries, start=1):
+    if run.target_path:
+        lines.append(f"- Target brief path: `{run.target_path}`")
+
+    lines.extend(
+        [
+            f"- Mode: {run.mode}",
+            f"- Discovery provider: {run.provider}",
+            f"- Prompts tested: {len(run.prompts)}",
+            f"- Responses captured: {len(run.responses)}",
+            f"- Cited/source URLs: {len(citations)}",
+            f"- Viability verdict: **{verdict}**",
+            "",
+            rationale,
+            "",
+            "## Important Limitations",
+            "",
+            "- This workflow does **not** scrape Google Jobs or run browser automation.",
+            "- Grounded answer text, citations, and snippets are discovery evidence only, "
+            "not complete job descriptions.",
+            "- Do not use grounded text for skill matching or eligibility decisions unless a "
+            "full posting is later imported from a canonical source URL or pasted text.",
+            "- CAPTCHA bypass, login automation, broad crawling, and the legacy Google Custom "
+            "Search JSON API are out of scope.",
+            "",
+            "## Prompts Tested",
+            "",
+        ]
+    )
+
+    if run.prompts:
+        for index, discovery_prompt in enumerate(run.prompts, start=1):
             lines.extend(
                 [
-                    f"### Query {index}: {search_query.label}",
+                    f"### Prompt {index}: {discovery_prompt.label}",
                     "",
-                    f"```text",
-                    search_query.query,
+                    "```text",
+                    discovery_prompt.prompt,
                     "```",
                     "",
                 ]
             )
     else:
-        lines.extend(["No queries were generated.", ""])
+        lines.extend(["No prompts were generated.", ""])
 
-    lines.extend(["## Result Counts", ""])
+    lines.extend(["## Citation Counts", ""])
 
-    if run.results:
-        result_counts = Counter(result.query for result in run.results)
-        for search_query in run.queries:
-            count = result_counts.get(search_query.query, 0)
-            lines.append(f"- {search_query.label}: {count} result(s)")
+    if run.responses:
+        for index, response in enumerate(run.responses, start=1):
+            lines.append(f"- Response {index}: {len(response.citations)} cited URL(s)")
         lines.append("")
         lines.append("### Likely source types")
         lines.append("")
@@ -123,7 +136,7 @@ def generate_search_feasibility_report(run: SearchFeasibilityRun) -> str:
     else:
         lines.extend(
             [
-                "- No search results were loaded for this run.",
+                "- No grounded responses were loaded for this run.",
                 "- Use `--fixture` with saved JSON or `--live` with credentials to capture results.",
                 "",
             ]
@@ -132,19 +145,16 @@ def generate_search_feasibility_report(run: SearchFeasibilityRun) -> str:
     lines.extend(["## Promising URLs", ""])
 
     if promising:
-        for result in promising:
-            domain = result.display_link or result.url
+        for citation in promising:
             lines.extend(
                 [
-                    f"- **{result.title}**",
-                    f"  - URL: {result.url}",
-                    f"  - Domain: {domain}",
-                    f"  - Source type: {result.source_type}",
-                    f"  - Query: `{result.query}`",
+                    f"- **{citation.title or citation.url}**",
+                    f"  - URL: {citation.url}",
+                    f"  - Source type: {citation.source_type}",
                 ]
             )
-            if result.snippet:
-                lines.append(f"  - Snippet (triage only): {result.snippet}")
+            if citation.snippet:
+                lines.append(f"  - Snippet (triage only): {citation.snippet}")
             lines.append("")
     else:
         lines.extend(
@@ -154,38 +164,68 @@ def generate_search_feasibility_report(run: SearchFeasibilityRun) -> str:
             ]
         )
 
-    if run.results:
-        lines.extend(["## All Results (provenance preserved)", ""])
-        for index, result in enumerate(run.results, start=1):
+    if run.responses:
+        lines.extend(["## Grounded Responses (provenance preserved)", ""])
+        for index, response in enumerate(run.responses, start=1):
             lines.extend(
                 [
-                    f"### Result {index}",
+                    f"### Response {index}",
                     "",
-                    f"- Query: `{result.query}`",
-                    f"- Title: {result.title}",
-                    f"- URL: {result.url}",
-                    f"- Display link: {result.display_link or 'n/a'}",
-                    f"- Provider: {result.provider}",
-                    f"- Source type: {result.source_type}",
-                    f"- Snippet: {result.snippet or 'n/a'}",
+                    f"- Provider: {response.provider}",
+                    f"- Model: {response.model or 'n/a'}",
+                    f"- Prompt label: {run.prompts[index - 1].label if index - 1 < len(run.prompts) else 'n/a'}",
+                    f"- Timestamp: {response.timestamp or 'n/a'}",
+                    "",
+                    "#### Prompt",
+                    "",
+                    "```text",
+                    response.prompt,
+                    "```",
+                    "",
+                    "#### Response text (triage only)",
+                    "",
+                    response.response_text or "_No response text captured._",
+                    "",
+                    "#### Cited/source URLs",
                     "",
                 ]
             )
+            if response.citations:
+                for citation in response.citations:
+                    lines.extend(
+                        [
+                            f"- **{citation.title or citation.url}**",
+                            f"  - URL: {citation.url}",
+                            f"  - Source type: {citation.source_type}",
+                        ]
+                    )
+                    if citation.snippet:
+                        lines.append(f"  - Snippet: {citation.snippet}")
+            else:
+                lines.append("- No cited URLs in this response.")
+
+            if response.grounding_metadata:
+                lines.extend(["", "#### Grounding metadata", "", "```json"])
+                lines.append(json.dumps(response.grounding_metadata, indent=2, sort_keys=True))
+                lines.append("```")
+
+            lines.append("")
 
     lines.extend(
         [
             "## Recommended Workflow",
             "",
-            "1. Generate target-aware dorks from a target brief.",
-            "2. Inspect JSON/search results manually or via fixture output.",
-            "3. Select promising canonical employer or ATS URLs.",
-            "4. Feed selected URLs or pasted posting text into Jobs Recon later.",
+            "1. Generate target-aware grounded-search prompts from a target brief.",
+            "2. Run fixture or controlled live grounding checks.",
+            "3. Inspect cited/source URLs manually.",
+            "4. Select promising canonical employer or ATS URLs.",
+            "5. Feed selected URLs or pasted posting text into Jobs Recon later.",
             "",
             "## Next Steps",
             "",
             "- Prefer importing canonical ATS/employer posting pages over aggregator listings.",
-            "- Treat aggregator and Google search-surface hits as leads, not final sources.",
-            "- Re-run with `--live` only when `GOOGLE_API_KEY` and `GOOGLE_CSE_ID` are configured.",
+            "- Treat aggregator and search-surface citations as leads, not final sources.",
+            "- Re-run with `--live` only when Gemini / Vertex grounding credentials are configured.",
             "",
         ]
     )
@@ -196,15 +236,19 @@ def generate_search_feasibility_report(run: SearchFeasibilityRun) -> str:
 def build_feasibility_run(
     *,
     target_name: str,
-    queries: list[SearchQuery],
-    results: list[SearchResult],
+    target_summary: str,
+    target_path: str | None,
+    prompts: list[DiscoveryPrompt],
+    responses: list[DiscoveryResponse],
     mode: str,
-    provider: str = SEARCH_PROVIDER_GOOGLE,
-) -> SearchFeasibilityRun:
-    return SearchFeasibilityRun(
+    provider: str = PROVIDER_GOOGLE_GROUNDING,
+) -> DiscoveryFeasibilityRun:
+    return DiscoveryFeasibilityRun(
         target_name=target_name,
-        queries=queries,
-        results=results,
+        target_summary=target_summary,
+        target_path=target_path,
+        prompts=prompts,
+        responses=responses,
         mode=mode,
         provider=provider,
     )

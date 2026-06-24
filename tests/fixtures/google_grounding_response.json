@@ -1,0 +1,49 @@
+{
+  "provider": "google_grounding",
+  "model": "gemini-2.5-flash",
+  "timestamp": "2026-06-22T12:00:00Z",
+  "response_text": "Several entry-level AI and software internship postings appear on public ATS pages in the Miami / South Florida area or remote. ExampleCo lists an AI Engineer Intern on Greenhouse, and Acme lists a Software Engineer Intern on Lever. Indeed also surfaces aggregator listings, but canonical ATS pages are preferable for import.",
+  "citations": [
+    {
+      "url": "https://boards.greenhouse.io/exampleco/jobs/123456",
+      "title": "AI Engineer Intern - ExampleCo",
+      "snippet": "Greenhouse posting for an AI Engineer Intern role in Miami or remote."
+    },
+    {
+      "url": "https://www.indeed.com/viewjob?jk=abc123",
+      "title": "Machine Learning Engineer - Indeed",
+      "snippet": "Aggregator listing for a machine learning engineer role."
+    },
+    {
+      "url": "https://jobs.lever.co/acme/abc-def-ghi",
+      "title": "Software Engineer Intern | Acme",
+      "snippet": "Lever posting for a software engineer intern role."
+    }
+  ],
+  "grounding_metadata": {
+    "webSearchQueries": [
+      "AI Engineer intern Miami Greenhouse",
+      "Software Engineer Intern remote Lever"
+    ],
+    "groundingChunks": [
+      {
+        "web": {
+          "uri": "https://boards.greenhouse.io/exampleco/jobs/123456",
+          "title": "AI Engineer Intern - ExampleCo"
+        }
+      },
+      {
+        "web": {
+          "uri": "https://www.indeed.com/viewjob?jk=abc123",
+          "title": "Machine Learning Engineer - Indeed"
+        }
+      },
+      {
+        "web": {
+          "uri": "https://jobs.lever.co/acme/abc-def-ghi",
+          "title": "Software Engineer Intern | Acme"
+        }
+      }
+    ]
+  }
+}

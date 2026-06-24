@@ -84,66 +84,74 @@ python -m jobs_recon --input examples/sample_postings.json --output output/recon
 
 MVP 0.3.1 answers one question:
 
-> Can target-aware Google dorks discover useful public posting URLs without Jobs Recon becoming a scraper?
+> Can Gemini / Vertex Google Search grounding discover useful public posting URLs without Jobs Recon becoming a scraper?
 
-This milestone is a **discovery feasibility spike**, not full ingestion. 
-- Jobs Recon can generate target-aware dork queries, optionally call the Google Custom Search JSON API when credentials are configured 
-- Classify candidate URLs by likely source type, and export a Markdown feasibility report.
+This milestone is a **discovery feasibility spike**, not full ingestion. Jobs Recon can generate target-aware grounded-search prompts, optionally call Gemini / Vertex with Google Search grounding when credentials are configured, classify cited URLs by likely source type, and export a Markdown feasibility report.
 
-It does **not** scrape Google Jobs, run browser automation, bypass CAPTCHAs, or treat search snippets as complete job descriptions.
+The earlier **Google Custom Search JSON API / dorking path is not used** because it is not viable for the current account setup. This spike evaluates grounding instead and keeps the design provider-neutral for future discovery backends.
 
-### Example target brief for dorking
+It does **not** scrape Google Jobs, run browser automation, bypass CAPTCHAs, or treat grounded answer text as complete job descriptions.
+
+### Example target brief for discovery
 
 See `examples/target-ai-engineer.json` for a Miami / South Florida AI and software intern/junior target.
 
-### Generate dork queries only (dry run)
+### Generate prompts only (dry run)
 
 ```bash
-python -m jobs_recon google-dorks --target examples/target-ai-engineer.json --dry-run
+python -m jobs_recon search-grounding --target examples/target-ai-engineer.json --dry-run
 ```
 
 ### Generate a feasibility report from fixture JSON (tests / offline)
 
 ```bash
-python -m jobs_recon google-dorks \
+python -m jobs_recon search-grounding \
   --target examples/target-ai-engineer.json \
-  --fixture tests/fixtures/google_search_response.json \
-  --output output/google_dork_feasibility.md
+  --fixture tests/fixtures/google_grounding_response.json \
+  --output output/google_grounding_feasibility.md
 ```
 
-### Run live Google JSON search (requires credentials)
+### Run live Google Search grounding (requires credentials)
 
-Set environment variables:
-
-- `GOOGLE_API_KEY` — Google API key with Custom Search API enabled
-- `GOOGLE_CSE_ID` — Programmable Search Engine ID (search engine cx value)
+Install the optional grounding extra:
 
 ```bash
-export GOOGLE_API_KEY="your-api-key"
-export GOOGLE_CSE_ID="your-cse-id"
+uv pip install -e ".[dev,grounding]"
+```
 
-python -m jobs_recon google-dorks \
+Set environment variables (see `.env.example`):
+
+- `GEMINI_API_KEY` — Gemini API key (or `GOOGLE_API_KEY` as fallback)
+- `GEMINI_MODEL` — optional, defaults to `gemini-2.5-flash`
+- For Vertex AI instead: `GOOGLE_GENAI_USE_VERTEXAI=true`, `GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_LOCATION`
+
+```bash
+export GEMINI_API_KEY="your-api-key"
+
+python -m jobs_recon search-grounding \
   --target examples/target-ai-engineer.json \
   --live \
-  --output output/google_dork_feasibility.md
+  --output output/google_grounding_feasibility.md
 ```
 
 If credentials are missing, `--live` exits with a clear error. Use `--dry-run` or `--fixture` instead.
 
 ### Recommended workflow
 
-1. Generate target-aware dorks with `--dry-run`.
-2. Inspect JSON/search results manually or via `--fixture` output.
-3. Select promising canonical employer or ATS URLs (prefer Greenhouse, Lever, Ashby, Workable, and similar ATS domains over aggregators).
-4. Feed selected URLs or pasted posting text into Jobs Recon later for skill matching and brief generation.
+1. Generate target-aware grounded-search prompts with `--dry-run`.
+2. Run fixture or controlled live grounding checks.
+3. Inspect cited/source URLs manually.
+4. Select promising canonical employer or ATS URLs (prefer Greenhouse, Lever, Ashby, Workable, and similar ATS domains over aggregators).
+5. Feed selected URLs or pasted posting text into Jobs Recon later for skill matching and brief generation.
 
 ### What MVP 0.3.1 does not do
 
+- Google Custom Search JSON API integration
 - Google Jobs UI scraping or browser automation
 - CAPTCHA bypass, login/session automation, or broad crawling
 - LinkedIn or Handshake scraping
 - Ranking/recommendation logic or application tracking
-- Treating Google snippets as final posting evidence for skill matching
+- Treating grounded responses as final posting evidence for skill matching
 
 ## Setup
 
