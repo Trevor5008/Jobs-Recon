@@ -2,8 +2,18 @@ from pathlib import Path
 
 import pytest
 
+from jobs_recon.brief.target import load_target_brief
 from jobs_recon.cli import main
-from jobs_recon.google_grounding import (
+from jobs_recon.discovery.leads import (
+    active_canonical_leads,
+    classify_result_url,
+    enrich_lead,
+    is_vertex_redirect_url,
+    promising_citations,
+)
+from jobs_recon.discovery.normalize import normalize_grounded_response
+from jobs_recon.discovery.prompts import generate_discovery_prompts
+from jobs_recon.discovery.providers.google import (
     GoogleGroundingConfigError,
     check_google_grounding_config,
     format_config_check_report,
@@ -11,8 +21,12 @@ from jobs_recon.google_grounding import (
     google_grounding_configured,
     load_grounding_fixture,
 )
-from jobs_recon.models import TargetBrief
-from jobs_recon.search_discovery import (
+from jobs_recon.discovery.report import (
+    assess_viability,
+    build_feasibility_run,
+    generate_search_feasibility_report,
+)
+from jobs_recon.discovery.types import (
     AVAILABILITY_ACTIVE,
     AVAILABILITY_AGGREGATOR_ONLY,
     AVAILABILITY_INACTIVE,
@@ -24,23 +38,10 @@ from jobs_recon.search_discovery import (
     SOURCE_TYPE_SEARCH_SURFACE,
     SOURCE_TYPE_UNKNOWN,
     DiscoveryLead,
-    active_canonical_leads,
-    classify_result_url,
-    enrich_lead,
-    generate_discovery_prompts,
-    is_vertex_redirect_url,
-    normalize_grounded_response,
-    promising_citations,
 )
-from jobs_recon.search_feasibility import (
-    assess_viability,
-    build_feasibility_run,
-    generate_search_feasibility_report,
-)
-from jobs_recon.target import load_target_brief
 
-EXAMPLES_DIR = Path(__file__).resolve().parents[1] / "examples"
-FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures"
+EXAMPLES_DIR = Path(__file__).resolve().parents[2] / "examples"
+FIXTURES_DIR = Path(__file__).resolve().parents[1] / "fixtures"
 TARGET_AI_PATH = EXAMPLES_DIR / "target-ai-engineer.json"
 GROUNDING_FIXTURE_PATH = FIXTURES_DIR / "google_grounding_response.json"
 SAMPLE_PATH = EXAMPLES_DIR / "sample_postings.json"
@@ -50,7 +51,7 @@ VERTEX_REDIRECT = (
     "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQEXAMPLE"
 )
 
-
+# Test that discovery prompts are generated from a target brief
 def test_generate_discovery_prompts_from_target_brief():
     target = load_target_brief(TARGET_AI_PATH)
     prompts = generate_discovery_prompts(target)
@@ -62,6 +63,7 @@ def test_generate_discovery_prompts_from_target_brief():
     assert "canonical employer career pages" in general.prompt
 
 
+# Test that result URL classification is correct
 @pytest.mark.parametrize(
     ("url", "expected"),
     [
@@ -77,10 +79,13 @@ def test_generate_discovery_prompts_from_target_brief():
         ("", SOURCE_TYPE_IRRELEVANT),
     ],
 )
+
+# Test that result URL classification is correct
 def test_classify_result_url(url: str, expected: str):
     assert classify_result_url(url) == expected
 
 
+# Test that vertex redirect is preserved as a discovery URL
 def test_vertex_redirect_preserved_as_discovery_url():
     payload = load_grounding_fixture(str(GROUNDING_FIXTURE_PATH))
     response = normalize_grounded_response(payload, "test prompt")
@@ -90,12 +95,14 @@ def test_vertex_redirect_preserved_as_discovery_url():
     assert all(lead.discovery_url.startswith("https://vertexaisearch.cloud.google.com/") for lead in redirect_leads)
 
 
+# Test that vertex redirect is not classified as an employer without a canonical URL
 def test_vertex_redirect_not_classified_as_employer_without_canonical_url():
     lead = enrich_lead(DiscoveryLead(discovery_url=VERTEX_REDIRECT, title="myworkdayjobs.com"))
     assert lead.source_type == SOURCE_TYPE_UNKNOWN
     assert lead.availability_status == AVAILABILITY_UNCERTAIN
 
 
+# Test that canonical URL classification wins
 def test_canonical_url_classification_wins():
     lead = enrich_lead(
         DiscoveryLead(
@@ -105,9 +112,11 @@ def test_canonical_url_classification_wins():
         )
     )
     assert lead.source_type == SOURCE_TYPE_ATS
+    assert lead.canonical_posting_url is not None
     assert lead.canonical_posting_url.endswith("/123456")
 
 
+# Test that parsing grounding fixture results is correct
 def test_parse_grounding_fixture_results():
     payload = load_grounding_fixture(str(GROUNDING_FIXTURE_PATH))
     response = normalize_grounded_response(payload, "test prompt")
@@ -120,6 +129,7 @@ def test_parse_grounding_fixture_results():
     assert any(lead.availability_status == AVAILABILITY_LOGIN_GATED for lead in response.citations)
 
 
+# Test that availability status defaults to uncertain
 def test_availability_status_defaults_to_uncertain():
     lead = enrich_lead(
         DiscoveryLead(
@@ -130,6 +140,7 @@ def test_availability_status_defaults_to_uncertain():
     assert lead.availability_status == AVAILABILITY_UNCERTAIN
 
 
+# Test that promising citations prefers active canonical leads
 def test_promising_citations_prefers_active_canonical_leads():
     payload = load_grounding_fixture(str(GROUNDING_FIXTURE_PATH))
     response = normalize_grounded_response(payload, "test prompt")
@@ -140,6 +151,7 @@ def test_promising_citations_prefers_active_canonical_leads():
     assert promising[0].canonical_posting_url
 
 
+# Test that search feasibility report includes lead fields
 def test_search_feasibility_report_includes_lead_fields():
     target = load_target_brief(TARGET_AI_PATH)
     prompts = generate_discovery_prompts(target)
@@ -165,6 +177,7 @@ def test_search_feasibility_report_includes_lead_fields():
     assert "Vertex redirect wrapper only" in report
 
 
+# Test that assess viability with active canonical fixture is correct
 def test_assess_viability_with_active_canonical_fixture():
     payload = load_grounding_fixture(str(GROUNDING_FIXTURE_PATH))
     response = normalize_grounded_response(payload, "test")
@@ -173,6 +186,7 @@ def test_assess_viability_with_active_canonical_fixture():
     assert verdict == "promising"
 
 
+# Test that vertex config check succeeds when env is set
 def test_vertex_config_check_succeeds_when_env_is_set(monkeypatch, tmp_path: Path):
     creds = tmp_path / "gcp-credentials.json"
     creds.write_text("{}", encoding="utf-8")
@@ -192,6 +206,7 @@ def test_vertex_config_check_succeeds_when_env_is_set(monkeypatch, tmp_path: Pat
     assert "jobs-recon" in report
 
 
+# Test that vertex config check fails when project is missing
 def test_vertex_config_check_fails_when_project_missing(monkeypatch):
     monkeypatch.setenv("GOOGLE_GENAI_USE_VERTEXAI", "true")
     monkeypatch.delenv("GOOGLE_CLOUD_PROJECT", raising=False)
@@ -203,6 +218,7 @@ def test_vertex_config_check_fails_when_project_missing(monkeypatch):
     assert any("GOOGLE_CLOUD_PROJECT" in issue for issue in result.issues)
 
 
+# Test that missing grounding credentials raise a clear error
 def test_missing_grounding_credentials_raise_clear_error(monkeypatch):
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
     monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
@@ -213,6 +229,7 @@ def test_missing_grounding_credentials_raise_clear_error(monkeypatch):
         get_google_grounding_config()
 
 
+# Test that CLI search grounding check config is correct
 def test_cli_search_grounding_check_config(capsys, monkeypatch, tmp_path: Path):
     creds = tmp_path / "gcp-credentials.json"
     creds.write_text("{}", encoding="utf-8")
@@ -228,6 +245,7 @@ def test_cli_search_grounding_check_config(capsys, monkeypatch, tmp_path: Path):
     assert "mode: vertex" in captured.out
 
 
+# Test that CLI search grounding dry run prints prompts
 def test_cli_search_grounding_dry_run_prints_prompts(capsys):
     exit_code = main(
         [
@@ -244,6 +262,7 @@ def test_cli_search_grounding_dry_run_prints_prompts(capsys):
     assert "Generated" in captured.out
 
 
+# Test that CLI search grounding fixture writes report
 def test_cli_search_grounding_fixture_writes_report(tmp_path: Path):
     output_path = tmp_path / "google_grounding_feasibility.md"
     exit_code = main(
@@ -264,6 +283,7 @@ def test_cli_search_grounding_fixture_writes_report(tmp_path: Path):
     assert "boards.greenhouse.io" in content
 
 
+# Test that CLI live without credentials returns nonzero
 def test_cli_live_without_credentials_returns_nonzero(monkeypatch, tmp_path: Path):
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
     monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
@@ -285,6 +305,7 @@ def test_cli_live_without_credentials_returns_nonzero(monkeypatch, tmp_path: Pat
     assert not output_path.exists()
 
 
+# Test that existing brief command still works
 def test_existing_brief_command_still_works(tmp_path: Path):
     output_path = tmp_path / "recon_brief.md"
     exit_code = main(["--input", str(SAMPLE_PATH), "--output", str(output_path)])
@@ -293,6 +314,7 @@ def test_existing_brief_command_still_works(tmp_path: Path):
     assert "Postings analyzed: 3" in output_path.read_text(encoding="utf-8")
 
 
+# Test that existing source feasibility command still works
 def test_existing_source_feasibility_command_still_works(tmp_path: Path):
     output_path = tmp_path / "handshake_feasibility.md"
     exit_code = main(
@@ -309,6 +331,7 @@ def test_existing_source_feasibility_command_still_works(tmp_path: Path):
     assert "Source Feasibility Report: Handshake" in output_path.read_text(encoding="utf-8")
 
 
+# Test that existing target aware brief command still works
 def test_existing_target_aware_brief_command_still_works(tmp_path: Path):
     output_path = tmp_path / "recon_brief.md"
     exit_code = main(

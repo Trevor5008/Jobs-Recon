@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 
-
+# JobPosting class schema
 @dataclass
 class JobPosting:
     title: str
@@ -11,7 +11,7 @@ class JobPosting:
     location: str | None = None
     skills: list[str] = field(default_factory=list)
 
-
+# TargetBrief class schema
 @dataclass
 class TargetBrief:
     name: str
@@ -24,6 +24,7 @@ class TargetBrief:
     notes: str | None = None
 
 
+# TargetMatch class schema
 @dataclass
 class TargetMatch:
     included: bool

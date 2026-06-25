@@ -3,11 +3,10 @@ from pathlib import Path
 
 import pytest
 
-from jobs_recon.brief import generate_brief
-from utils.parser import extract_skills, load_postings
+from jobs_recon.brief.io import extract_skills, load_postings
+from jobs_recon.brief.report import generate_brief
 
-SAMPLE_PATH = Path(__file__).resolve().parents[1] / "examples" / "sample_postings.json"
-
+SAMPLE_PATH = Path(__file__).resolve().parents[2] / "examples" / "sample_postings.json"
 
 # Test that the parser accepts valid sample postings
 def test_parser_accepts_valid_sample_postings():

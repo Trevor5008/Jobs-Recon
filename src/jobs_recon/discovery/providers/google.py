@@ -6,13 +6,17 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from jobs_recon.search_discovery import (
+from jobs_recon.discovery.leads import enrich_lead
+from jobs_recon.discovery.normalize import normalize_grounded_response
+from jobs_recon.discovery.prompts import generate_discovery_prompts
+from jobs_recon.discovery.providers.protocol import SearchDiscoveryProvider
+from jobs_recon.discovery.types import (
     PROVIDER_GOOGLE_GROUNDING,
     DiscoveryLead,
+    DiscoveryPrompt,
     DiscoveryResponse,
-    enrich_lead,
-    normalize_grounded_response,
 )
+from jobs_recon.models import TargetBrief
 
 GEMINI_API_KEY_ENV = "GEMINI_API_KEY"
 GOOGLE_API_KEY_ENV = "GOOGLE_API_KEY"
@@ -56,8 +60,6 @@ def _truthy(value: str | None) -> bool:
 
 
 def _is_genai_available() -> bool:
-    # Avoid importing google.genai here; on Python 3.14 it emits a third-party
-    # DeprecationWarning from google.genai.types during import.
     return importlib.util.find_spec("google.genai") is not None
 
 
@@ -295,6 +297,16 @@ def discover_with_google_grounding(prompt: str) -> DiscoveryResponse:
         citations=leads,
         grounding_metadata=grounding_metadata,
     )
+
+
+class GoogleGroundingProvider:
+    name = PROVIDER_GOOGLE_GROUNDING
+
+    def generate_queries(self, target: TargetBrief) -> list[DiscoveryPrompt]:
+        return generate_discovery_prompts(target)
+
+    def discover(self, prompt: DiscoveryPrompt) -> DiscoveryResponse:
+        return discover_with_google_grounding(prompt.prompt)
 
 
 def load_grounding_fixture(path: str) -> dict:

@@ -3,11 +3,8 @@ from pathlib import Path
 import pytest
 
 from jobs_recon.cli import main
-from jobs_recon.source_feasibility import (
-    generate_feasibility_report,
-    get_source_profile,
-    handshake_profile,
-)
+from jobs_recon.sources.profiles import get_source_profile, handshake_profile
+from jobs_recon.sources.report import generate_feasibility_report
 
 API_FACT_PATTERNS = (
     "has a public api",
@@ -17,7 +14,7 @@ API_FACT_PATTERNS = (
     "handshake api supports",
 )
 
-# Test that the handshake feasibility profile exists
+# Test that handshake feasibility profile exists
 def test_handshake_feasibility_profile_exists():
     profile = handshake_profile()
 
@@ -30,19 +27,19 @@ def test_handshake_feasibility_profile_exists():
     assert profile.recommended_next_step
 
 
-# Test that the get_source_profile function accepts handshake as an alias
+# Test that get source profile accepts handshake alias
 def test_get_source_profile_accepts_handshake_alias():
     profile = get_source_profile("handshake")
     assert profile.source_name == "Handshake"
 
 
-# Test that the get_source_profile function rejects unknown sources
+# Test that get source profile rejects unknown source
 def test_get_source_profile_rejects_unknown_source():
     with pytest.raises(ValueError, match="Unknown source"):
         get_source_profile("unknown-board")
 
 
-# Test that the markdown report includes required sections
+# Test that markdown report includes required sections
 def test_markdown_report_includes_required_sections():
     report = generate_feasibility_report(handshake_profile())
 
@@ -54,7 +51,7 @@ def test_markdown_report_includes_required_sections():
     assert "direct adapter only if supported by terms and access model" in report
 
 
-# Test that the markdown report does not claim direct API support
+# Test that markdown report does not claim direct api support
 def test_markdown_report_does_not_claim_direct_api_support():
     report = generate_feasibility_report(handshake_profile()).lower()
 
@@ -65,7 +62,7 @@ def test_markdown_report_does_not_claim_direct_api_support():
     assert "unknown until terms/access are reviewed" in report
 
 
-# Test that the CLI writes feasibility markdown output
+# Test that cli writes feasibility markdown output
 def test_cli_writes_feasibility_markdown_output(tmp_path: Path):
     output_path = tmp_path / "handshake_feasibility.md"
     exit_code = main(
