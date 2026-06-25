@@ -3,7 +3,13 @@
 import json
 from collections import Counter
 
-from jobs_recon.search_discovery import (
+from jobs_recon.discovery.leads import (
+    active_canonical_leads,
+    all_citations,
+    group_leads_by_availability,
+    is_vertex_redirect_url,
+)
+from jobs_recon.discovery.types import (
     AVAILABILITY_ACTIVE,
     AVAILABILITY_AGGREGATOR_ONLY,
     AVAILABILITY_INACTIVE,
@@ -16,19 +22,14 @@ from jobs_recon.search_discovery import (
     DiscoveryLead,
     DiscoveryPrompt,
     DiscoveryResponse,
-    active_canonical_leads,
-    all_citations,
-    group_leads_by_availability,
-    is_vertex_redirect_url,
 )
 
-# Count the number of leads by source type
+
 def _count_by_source_type(leads: list[DiscoveryLead]) -> Counter[str]:
     return Counter(lead.source_type for lead in leads)
 
-# Assess the viability of the leads
+
 def assess_viability(leads: list[DiscoveryLead]) -> tuple[str, str]:
-    # Check if there are any leads
     if not leads:
         return (
             "inconclusive",
@@ -36,7 +37,6 @@ def assess_viability(leads: list[DiscoveryLead]) -> tuple[str, str]:
             "fixture or live grounding output before deciding.",
         )
 
-    # Check if there are any active canonical leads
     active_canonical = active_canonical_leads(leads)
     if active_canonical:
         return (
@@ -44,19 +44,13 @@ def assess_viability(leads: list[DiscoveryLead]) -> tuple[str, str]:
             "At least one active canonical ATS or employer URL was identified.",
         )
 
-    # Count the number of preferred source types
     counts = _count_by_source_type(leads)
     preferred_count = sum(counts.get(source_type, 0) for source_type in PREFERRED_SOURCE_TYPES)
-    # Count the number of deprioritized source types
-    deprioritized_count = sum(
-        counts.get(source_type, 0) for source_type in DEPRIORITIZED_SOURCE_TYPES
-    )
+    deprioritized_count = sum(counts.get(source_type, 0) for source_type in DEPRIORITIZED_SOURCE_TYPES)
 
-    # Check if there are any canonical preferred leads
     canonical_preferred = [
         lead for lead in leads if lead.canonical_posting_url and lead.source_type in PREFERRED_SOURCE_TYPES
     ]
-    # Check if there are any canonical preferred leads
     if canonical_preferred:
         return (
             "mixed",
@@ -64,7 +58,6 @@ def assess_viability(leads: list[DiscoveryLead]) -> tuple[str, str]:
             "Manual URL review is required before import.",
         )
 
-    # Check if there are any preferred leads and deprioritized leads
     if preferred_count >= 1 and preferred_count >= deprioritized_count:
         return (
             "mixed",
@@ -72,7 +65,6 @@ def assess_viability(leads: list[DiscoveryLead]) -> tuple[str, str]:
             "need manual resolution before import.",
         )
 
-    # Check if there are any deprioritized leads
     if deprioritized_count >= 1:
         return (
             "weak",
@@ -80,17 +72,11 @@ def assess_viability(leads: list[DiscoveryLead]) -> tuple[str, str]:
             "rather than verified canonical posting URLs.",
         )
 
-    # Return inconclusive
-    return (
-        "inconclusive",
-        "Results were mostly unclassified or redirect-only. Manual URL inspection is required.",
-    )
+    return ("inconclusive", "Results were mostly unclassified or redirect-only. Manual URL inspection is required.")
 
 
-# Format the lead lines
 def _format_lead_lines(lead: DiscoveryLead) -> list[str]:
-    # Build the lines
-    lines = [
+    lines: list[str] = [
         f"- **{lead.title or lead.display_domain or lead.discovery_url}**",
         f"  - Discovery URL: {lead.discovery_url}",
         f"  - Canonical posting URL: {lead.canonical_posting_url or 'not resolved'}",
@@ -98,24 +84,19 @@ def _format_lead_lines(lead: DiscoveryLead) -> list[str]:
         f"  - Source type: {lead.source_type}",
         f"  - Availability: {lead.availability_status}",
     ]
-    # Check if the lead is a vertex redirect URL and does not have a canonical posting URL
     if is_vertex_redirect_url(lead.discovery_url) and not lead.canonical_posting_url:
         lines.append(
             "  - Note: Vertex redirect wrapper only; resolve manually before treating as actionable."
         )
-    # Check if the lead has a snippet
     if lead.snippet:
         lines.append(f"  - Snippet (triage only): {lead.snippet}")
     return lines
 
-# Generate a search feasibility report
+
 def generate_search_feasibility_report(run: DiscoveryFeasibilityRun) -> str:
-    # Get the leads
     leads = all_citations(run.responses)
     verdict, rationale = assess_viability(leads)
-    # Count the number of leads by source type
     counts = _count_by_source_type(leads)
-    # Group the leads by availability
     grouped = group_leads_by_availability(leads)
 
     lines: list[str] = [
@@ -157,7 +138,6 @@ def generate_search_feasibility_report(run: DiscoveryFeasibilityRun) -> str:
             "",
         ]
     )
-    # Check if there are any prompts
     if run.prompts:
         for index, discovery_prompt in enumerate(run.prompts, start=1):
             lines.extend(
@@ -170,26 +150,21 @@ def generate_search_feasibility_report(run: DiscoveryFeasibilityRun) -> str:
                     "",
                 ]
             )
-    # If there are no prompts, add a message
     else:
         lines.extend(["No prompts were generated.", ""])
 
     lines.extend(["## Citation Counts", ""])
 
-    # Check if there are any responses
     if run.responses:
-        # Add the response counts
         for index, response in enumerate(run.responses, start=1):
             lines.append(f"- Response {index}: {len(response.citations)} cited URL(s)")
         lines.append("")
-        # Add the likely source types
         lines.append("### Likely source types")
         lines.append("")
         for source_type, count in sorted(counts.items()):
             lines.append(f"- {source_type}: {count}")
         lines.append("")
     else:
-        # If there are no responses, add a message
         lines.extend(
             [
                 "- No grounded responses were loaded for this run.",
@@ -198,10 +173,8 @@ def generate_search_feasibility_report(run: DiscoveryFeasibilityRun) -> str:
             ]
         )
 
-    # Add the candidate leads section
     lines.extend(["## Candidate Leads", ""])
 
-    # Build the sections
     sections = [
         ("### Active canonical leads", grouped[AVAILABILITY_ACTIVE]),
         ("### Aggregator-only leads", grouped[AVAILABILITY_AGGREGATOR_ONLY]),
@@ -210,11 +183,9 @@ def generate_search_feasibility_report(run: DiscoveryFeasibilityRun) -> str:
         ("### Uncertain / manual review needed", grouped[AVAILABILITY_UNCERTAIN]),
     ]
 
-    # Add the sections
     for heading, bucket in sections:
         lines.append(heading)
         lines.append("")
-        # Add the leads
         if bucket:
             for lead in bucket:
                 lines.extend(_format_lead_lines(lead))
@@ -223,7 +194,6 @@ def generate_search_feasibility_report(run: DiscoveryFeasibilityRun) -> str:
             lines.append("_None in this run._")
             lines.append("")
 
-    # Check if there are any active canonical leads
     if not grouped[AVAILABILITY_ACTIVE]:
         lines.extend(
             [
@@ -233,9 +203,7 @@ def generate_search_feasibility_report(run: DiscoveryFeasibilityRun) -> str:
             ]
         )
 
-    # Check if there are any responses
     if run.responses:
-        # Add the grounded responses section
         lines.extend(["## Grounded Responses (provenance preserved)", ""])
         for index, response in enumerate(run.responses, start=1):
             lines.extend(
@@ -296,7 +264,7 @@ def generate_search_feasibility_report(run: DiscoveryFeasibilityRun) -> str:
 
     return "\n".join(lines)
 
-# Build a feasibility run
+
 def build_feasibility_run(
     *,
     target_name: str,
@@ -307,7 +275,6 @@ def build_feasibility_run(
     mode: str,
     provider: str = PROVIDER_GOOGLE_GROUNDING,
 ) -> DiscoveryFeasibilityRun:
-    # Build the run
     return DiscoveryFeasibilityRun(
         target_name=target_name,
         target_summary=target_summary,

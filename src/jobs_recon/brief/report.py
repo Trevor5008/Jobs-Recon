@@ -1,7 +1,7 @@
 from collections import Counter
 
+from jobs_recon.brief.target import evaluate_postings_against_target
 from jobs_recon.models import JobPosting, TargetBrief, TargetMatch
-from jobs_recon.target import evaluate_postings_against_target
 
 
 def _pluralize_postings(count: int) -> str:

@@ -4,26 +4,28 @@ import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
-from utils.parser import load_postings
-
-from jobs_recon.brief import generate_brief
-from jobs_recon.discovery_provider import GoogleGroundingProvider, ManualFixtureProvider
-from jobs_recon.google_grounding import (
-    GoogleGroundingConfigError,
+from jobs_recon.brief.io import load_postings
+from jobs_recon.brief.report import generate_brief
+from jobs_recon.brief.target import load_target_brief
+from jobs_recon.discovery.prompts import summarize_target
+from jobs_recon.discovery.providers import GoogleGroundingConfigError, GoogleGroundingProvider, ManualFixtureProvider
+from jobs_recon.discovery.providers.google import (
     check_google_grounding_config,
     format_config_check_report,
 )
-from jobs_recon.search_discovery import summarize_target
-from jobs_recon.search_feasibility import (
+from jobs_recon.discovery.report import (
     build_feasibility_run,
     generate_search_feasibility_report,
 )
-from jobs_recon.source_feasibility import generate_feasibility_report, get_source_profile
-from jobs_recon.target import load_target_brief
+from jobs_recon.sources.profiles import get_source_profile
+from jobs_recon.sources.report import generate_feasibility_report
 
+# Load the environment variables
 load_dotenv()
 
+# Define the source feasibility command
 SOURCE_FEASIBILITY_COMMAND = "source-feasibility"
+# Define the search grounding command
 SEARCH_GROUNDING_COMMAND = "search-grounding"
 
 # Build the parser for the brief command

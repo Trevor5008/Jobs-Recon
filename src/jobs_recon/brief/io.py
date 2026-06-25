@@ -1,35 +1,20 @@
 import json
 from pathlib import Path
 
+# Import the JobPosting class
 from jobs_recon.models import JobPosting
 
-REQUIRED_FIELDS = ("title", "company", "description")
-# Define the skill vocabulary
-SKILL_VOCABULARY: tuple[str, ...] = (
-    "Python",
-    "JavaScript",
-    "TypeScript",
-    "SQL",
-    "Git",
-    "React",
-    "Node.js",
-    "AWS",
-    "Docker",
-    "Linux",
-    "Machine Learning",
-    "Data Analysis",
-    "Excel",
-    "Communication",
-    "Teamwork",
-)
+# Import the skill vocabulary
+from jobs_recon.brief.constants import SKILL_VOCABULARY, REQUIRED_FIELDS
 
-# Extract skills from a posting description
+# Helper function to extract skills from a posting description
 def extract_skills(description: str) -> list[str]:
     """Return matched skills in vocabulary order (deterministic)."""
     desc_lower = description.lower()
     return [skill for skill in SKILL_VOCABULARY if skill.lower() in desc_lower]
 
-# Validate a posting
+
+# Helper function to validate a posting schema
 def _validate_posting(raw: dict, index: int) -> None:
     if not isinstance(raw, dict):
         raise ValueError(f"Posting at index {index} must be an object, got {type(raw).__name__}")
@@ -40,7 +25,7 @@ def _validate_posting(raw: dict, index: int) -> None:
             f"Posting at index {index} is missing required field(s): {', '.join(missing)}"
         )
 
-# Parse a posting into a JobPosting object
+# Helper function to parse a posting into a JobPosting
 def _parse_posting(raw: dict) -> JobPosting:
     skills = extract_skills(raw["description"])
     return JobPosting(
