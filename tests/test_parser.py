@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from jobs_recon.brief import generate_brief
-from jobs_recon.parser import extract_skills, load_postings
+from utils.parser import extract_skills, load_postings
 
 SAMPLE_PATH = Path(__file__).resolve().parents[1] / "examples" / "sample_postings.json"
 

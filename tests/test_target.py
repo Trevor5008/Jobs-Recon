@@ -6,7 +6,7 @@ import pytest
 from jobs_recon.brief import generate_brief
 from jobs_recon.cli import main
 from jobs_recon.models import JobPosting, TargetBrief
-from jobs_recon.parser import load_postings
+from utils.parser import load_postings
 from jobs_recon.target import evaluate_posting_against_target, load_target_brief
 
 EXAMPLES_DIR = Path(__file__).resolve().parents[1] / "examples"

@@ -4,70 +4,119 @@ import json
 from collections import Counter
 
 from jobs_recon.search_discovery import (
+    AVAILABILITY_ACTIVE,
+    AVAILABILITY_AGGREGATOR_ONLY,
+    AVAILABILITY_INACTIVE,
+    AVAILABILITY_LOGIN_GATED,
+    AVAILABILITY_UNCERTAIN,
     DEPRIORITIZED_SOURCE_TYPES,
     PREFERRED_SOURCE_TYPES,
     PROVIDER_GOOGLE_GROUNDING,
     DiscoveryFeasibilityRun,
+    DiscoveryLead,
     DiscoveryPrompt,
     DiscoveryResponse,
+    active_canonical_leads,
     all_citations,
-    promising_citations,
+    group_leads_by_availability,
+    is_vertex_redirect_url,
 )
 
+# Count the number of leads by source type
+def _count_by_source_type(leads: list[DiscoveryLead]) -> Counter[str]:
+    return Counter(lead.source_type for lead in leads)
 
-def _count_by_source_type(citations) -> Counter[str]:
-    return Counter(citation.source_type for citation in citations)
-
-
-def assess_viability(citations) -> tuple[str, str]:
-    """Return (verdict, rationale) for whether this discovery path looks viable."""
-    if not citations:
+# Assess the viability of the leads
+def assess_viability(leads: list[DiscoveryLead]) -> tuple[str, str]:
+    # Check if there are any leads
+    if not leads:
         return (
             "inconclusive",
             "No cited URLs were available to evaluate. Generate prompts and inspect "
             "fixture or live grounding output before deciding.",
         )
 
-    counts = _count_by_source_type(citations)
+    # Check if there are any active canonical leads
+    active_canonical = active_canonical_leads(leads)
+    if active_canonical:
+        return (
+            "promising",
+            "At least one active canonical ATS or employer URL was identified.",
+        )
+
+    # Count the number of preferred source types
+    counts = _count_by_source_type(leads)
     preferred_count = sum(counts.get(source_type, 0) for source_type in PREFERRED_SOURCE_TYPES)
+    # Count the number of deprioritized source types
     deprioritized_count = sum(
         counts.get(source_type, 0) for source_type in DEPRIORITIZED_SOURCE_TYPES
     )
 
-    if preferred_count >= 1 and preferred_count >= deprioritized_count:
-        return (
-            "promising",
-            "At least one ATS or employer URL appeared, and preferred URLs were not "
-            "outnumbered by aggregators or search surfaces.",
-        )
-
-    if preferred_count >= 1:
+    # Check if there are any canonical preferred leads
+    canonical_preferred = [
+        lead for lead in leads if lead.canonical_posting_url and lead.source_type in PREFERRED_SOURCE_TYPES
+    ]
+    # Check if there are any canonical preferred leads
+    if canonical_preferred:
         return (
             "mixed",
-            "Some ATS or employer URLs appeared, but aggregators or search surfaces "
-            "were also common. Treat results as triage-only.",
+            "Canonical ATS or employer URLs appeared, but none were marked active. "
+            "Manual URL review is required before import.",
         )
 
+    # Check if there are any preferred leads and deprioritized leads
+    if preferred_count >= 1 and preferred_count >= deprioritized_count:
+        return (
+            "mixed",
+            "Some ATS or employer signals appeared, but redirect-only or unverified URLs "
+            "need manual resolution before import.",
+        )
+
+    # Check if there are any deprioritized leads
     if deprioritized_count >= 1:
         return (
             "weak",
-            "Results skewed toward aggregators or search surfaces rather than "
-            "canonical employer or ATS posting URLs.",
+            "Results skewed toward aggregators, search surfaces, or redirect-only citations "
+            "rather than verified canonical posting URLs.",
         )
 
+    # Return inconclusive
     return (
         "inconclusive",
-        "Results were mostly unclassified. Manual URL inspection is required before "
-        "using this source path.",
+        "Results were mostly unclassified or redirect-only. Manual URL inspection is required.",
     )
 
 
+# Format the lead lines
+def _format_lead_lines(lead: DiscoveryLead) -> list[str]:
+    # Build the lines
+    lines = [
+        f"- **{lead.title or lead.display_domain or lead.discovery_url}**",
+        f"  - Discovery URL: {lead.discovery_url}",
+        f"  - Canonical posting URL: {lead.canonical_posting_url or 'not resolved'}",
+        f"  - Display domain: {lead.display_domain or 'n/a'}",
+        f"  - Source type: {lead.source_type}",
+        f"  - Availability: {lead.availability_status}",
+    ]
+    # Check if the lead is a vertex redirect URL and does not have a canonical posting URL
+    if is_vertex_redirect_url(lead.discovery_url) and not lead.canonical_posting_url:
+        lines.append(
+            "  - Note: Vertex redirect wrapper only; resolve manually before treating as actionable."
+        )
+    # Check if the lead has a snippet
+    if lead.snippet:
+        lines.append(f"  - Snippet (triage only): {lead.snippet}")
+    return lines
+
+# Generate a search feasibility report
 def generate_search_feasibility_report(run: DiscoveryFeasibilityRun) -> str:
-    """Build a deterministic Markdown feasibility report for search grounding."""
-    citations = all_citations(run.responses)
-    verdict, rationale = assess_viability(citations)
-    counts = _count_by_source_type(citations)
-    promising = promising_citations(citations)
+    # Get the leads
+    leads = all_citations(run.responses)
+    verdict, rationale = assess_viability(leads)
+    # Count the number of leads by source type
+    counts = _count_by_source_type(leads)
+    # Group the leads by availability
+    grouped = group_leads_by_availability(leads)
 
     lines: list[str] = [
         "# Search Feasibility Report: Google Search Grounding",
@@ -87,7 +136,8 @@ def generate_search_feasibility_report(run: DiscoveryFeasibilityRun) -> str:
             f"- Discovery provider: {run.provider}",
             f"- Prompts tested: {len(run.prompts)}",
             f"- Responses captured: {len(run.responses)}",
-            f"- Cited/source URLs: {len(citations)}",
+            f"- Candidate leads: {len(leads)}",
+            f"- Active canonical leads: {len(grouped[AVAILABILITY_ACTIVE])}",
             f"- Viability verdict: **{verdict}**",
             "",
             rationale,
@@ -97,16 +147,17 @@ def generate_search_feasibility_report(run: DiscoveryFeasibilityRun) -> str:
             "- This workflow does **not** scrape Google Jobs or run browser automation.",
             "- Grounded answer text, citations, and snippets are discovery evidence only, "
             "not complete job descriptions.",
+            "- Vertex redirect URLs are not canonical posting URLs.",
             "- Do not use grounded text for skill matching or eligibility decisions unless a "
             "full posting is later imported from a canonical source URL or pasted text.",
-            "- CAPTCHA bypass, login automation, broad crawling, and the legacy Google Custom "
-            "Search JSON API are out of scope.",
+            "- Aggregator echoes are not actionable postings without a resolved canonical URL.",
+            "- The legacy Google Custom Search JSON API is deprecated and not the current path.",
             "",
             "## Prompts Tested",
             "",
         ]
     )
-
+    # Check if there are any prompts
     if run.prompts:
         for index, discovery_prompt in enumerate(run.prompts, start=1):
             lines.extend(
@@ -119,21 +170,26 @@ def generate_search_feasibility_report(run: DiscoveryFeasibilityRun) -> str:
                     "",
                 ]
             )
+    # If there are no prompts, add a message
     else:
         lines.extend(["No prompts were generated.", ""])
 
     lines.extend(["## Citation Counts", ""])
 
+    # Check if there are any responses
     if run.responses:
+        # Add the response counts
         for index, response in enumerate(run.responses, start=1):
             lines.append(f"- Response {index}: {len(response.citations)} cited URL(s)")
         lines.append("")
+        # Add the likely source types
         lines.append("### Likely source types")
         lines.append("")
         for source_type, count in sorted(counts.items()):
             lines.append(f"- {source_type}: {count}")
         lines.append("")
     else:
+        # If there are no responses, add a message
         lines.extend(
             [
                 "- No grounded responses were loaded for this run.",
@@ -142,29 +198,44 @@ def generate_search_feasibility_report(run: DiscoveryFeasibilityRun) -> str:
             ]
         )
 
-    lines.extend(["## Promising URLs", ""])
+    # Add the candidate leads section
+    lines.extend(["## Candidate Leads", ""])
 
-    if promising:
-        for citation in promising:
-            lines.extend(
-                [
-                    f"- **{citation.title or citation.url}**",
-                    f"  - URL: {citation.url}",
-                    f"  - Source type: {citation.source_type}",
-                ]
-            )
-            if citation.snippet:
-                lines.append(f"  - Snippet (triage only): {citation.snippet}")
+    # Build the sections
+    sections = [
+        ("### Active canonical leads", grouped[AVAILABILITY_ACTIVE]),
+        ("### Aggregator-only leads", grouped[AVAILABILITY_AGGREGATOR_ONLY]),
+        ("### Stale or inactive leads", grouped[AVAILABILITY_INACTIVE]),
+        ("### Login-gated leads", grouped[AVAILABILITY_LOGIN_GATED]),
+        ("### Uncertain / manual review needed", grouped[AVAILABILITY_UNCERTAIN]),
+    ]
+
+    # Add the sections
+    for heading, bucket in sections:
+        lines.append(heading)
+        lines.append("")
+        # Add the leads
+        if bucket:
+            for lead in bucket:
+                lines.extend(_format_lead_lines(lead))
+                lines.append("")
+        else:
+            lines.append("_None in this run._")
             lines.append("")
-    else:
+
+    # Check if there are any active canonical leads
+    if not grouped[AVAILABILITY_ACTIVE]:
         lines.extend(
             [
-                "No ATS or employer URLs were identified as promising in this run.",
+                "No active canonical leads were identified in this run. "
+                "Resolve discovery URLs manually before import.",
                 "",
             ]
         )
 
+    # Check if there are any responses
     if run.responses:
+        # Add the grounded responses section
         lines.extend(["## Grounded Responses (provenance preserved)", ""])
         for index, response in enumerate(run.responses, start=1):
             lines.extend(
@@ -191,16 +262,9 @@ def generate_search_feasibility_report(run: DiscoveryFeasibilityRun) -> str:
                 ]
             )
             if response.citations:
-                for citation in response.citations:
-                    lines.extend(
-                        [
-                            f"- **{citation.title or citation.url}**",
-                            f"  - URL: {citation.url}",
-                            f"  - Source type: {citation.source_type}",
-                        ]
-                    )
-                    if citation.snippet:
-                        lines.append(f"  - Snippet: {citation.snippet}")
+                for lead in response.citations:
+                    lines.extend(_format_lead_lines(lead))
+                    lines.append("")
             else:
                 lines.append("- No cited URLs in this response.")
 
@@ -215,24 +279,24 @@ def generate_search_feasibility_report(run: DiscoveryFeasibilityRun) -> str:
         [
             "## Recommended Workflow",
             "",
-            "1. Generate target-aware grounded-search prompts from a target brief.",
-            "2. Run fixture or controlled live grounding checks.",
-            "3. Inspect cited/source URLs manually.",
-            "4. Select promising canonical employer or ATS URLs.",
+            "1. Run `search-grounding --check-config` to verify Vertex setup.",
+            "2. Generate target-aware grounded-search prompts from a target brief.",
+            "3. Run fixture or controlled live grounding checks.",
+            "4. Resolve discovery URLs to canonical employer or ATS posting pages.",
             "5. Feed selected URLs or pasted posting text into Jobs Recon later.",
             "",
             "## Next Steps",
             "",
-            "- Prefer importing canonical ATS/employer posting pages over aggregator listings.",
-            "- Treat aggregator and search-surface citations as leads, not final sources.",
-            "- Re-run with `--live` only when Gemini / Vertex grounding credentials are configured.",
+            "- Prefer active canonical ATS/employer posting pages over aggregator listings.",
+            "- Treat redirect-only and aggregator-only hits as leads, not final sources.",
+            "- Re-run with `--live` only when Vertex grounding credentials are ready.",
             "",
         ]
     )
 
     return "\n".join(lines)
 
-
+# Build a feasibility run
 def build_feasibility_run(
     *,
     target_name: str,
@@ -243,6 +307,7 @@ def build_feasibility_run(
     mode: str,
     provider: str = PROVIDER_GOOGLE_GROUNDING,
 ) -> DiscoveryFeasibilityRun:
+    # Build the run
     return DiscoveryFeasibilityRun(
         target_name=target_name,
         target_summary=target_summary,

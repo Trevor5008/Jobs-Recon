@@ -119,15 +119,17 @@ Install the optional grounding extra:
 uv pip install -e ".[dev,grounding]"
 ```
 
-Set environment variables (see `.env.example`):
+Set environment variables (see `.env.example`). **Vertex AI is the recommended live path.**
 
-- `GEMINI_API_KEY` — Gemini API key (or `GOOGLE_API_KEY` as fallback)
+- `GOOGLE_GENAI_USE_VERTEXAI=true`
+- `GOOGLE_CLOUD_PROJECT`
+- `GOOGLE_CLOUD_LOCATION`
 - `GEMINI_MODEL` — optional, defaults to `gemini-2.5-flash`
-- For Vertex AI instead: `GOOGLE_GENAI_USE_VERTEXAI=true`, `GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_LOCATION`
+- `GOOGLE_APPLICATION_CREDENTIALS` — path to local service account JSON
+
+Gemini API key mode remains available if configured, but Vertex is the documented primary workflow.
 
 ```bash
-export GEMINI_API_KEY="your-api-key"
-
 python -m jobs_recon search-grounding \
   --target examples/target-ai-engineer.json \
   --live \
@@ -152,6 +154,80 @@ If credentials are missing, `--live` exits with a clear error. Use `--dry-run` o
 - LinkedIn or Handshake scraping
 - Ranking/recommendation logic or application tracking
 - Treating grounded responses as final posting evidence for skill matching
+
+## MVP 0.3.2
+
+MVP 0.3.2 answers one question:
+
+> Can the working Vertex / Gemini grounding setup become a repeatable local Jobs Recon workflow?
+
+This milestone hardens the now-working Vertex path. It makes configuration repeatable, separates discovery URLs from canonical posting URLs, and improves feasibility reporting so grounded leads are easier to triage manually.
+
+The **Google Custom Search JSON API is deprecated** in Jobs Recon and should not be treated as the active discovery path.
+
+### Vertex-first setup
+
+Copy `.env.example` to `.env` and set:
+
+- `GOOGLE_GENAI_USE_VERTEXAI=true`
+- `GOOGLE_CLOUD_PROJECT`
+- `GOOGLE_CLOUD_LOCATION` (for example `us-central1`)
+- `GEMINI_MODEL=gemini-2.5-flash`
+- `GOOGLE_APPLICATION_CREDENTIALS` — absolute path to your local service account JSON
+
+Keep `.env` and `gcp-credentials.json` out of git. The service account needs **Agent Platform User** (`roles/aiplatform.user`) on the project.
+
+Install the optional grounding extra:
+
+```bash
+uv pip install -e ".[dev,grounding]"
+```
+
+### Check config (no live API call)
+
+```bash
+python -m jobs_recon search-grounding --check-config
+```
+
+### Generate prompts only (dry run)
+
+```bash
+python -m jobs_recon search-grounding --target examples/target-ai-engineer.json --dry-run
+```
+
+### Generate a feasibility report from fixture JSON
+
+```bash
+python -m jobs_recon search-grounding \
+  --target examples/target-ai-engineer.json \
+  --fixture tests/fixtures/google_grounding_response.json \
+  --output output/google_grounding_feasibility.md
+```
+
+### Run live Vertex grounding
+
+```bash
+python -m jobs_recon search-grounding \
+  --target examples/target-ai-engineer.json \
+  --live \
+  --output output/google_grounding_feasibility_live.md
+```
+
+### How to interpret grounded leads
+
+- **Discovery URL** — what Vertex returned, including redirect wrappers
+- **Canonical posting URL** — the employer/ATS page to import later, if resolved
+- **Availability** — `active`, `inactive`, `login_gated`, `aggregator_only`, or `uncertain`
+- Grounded answer text is triage-only and is **not** enough to mark a lead active
+- Aggregator echoes and redirect-only citations are not actionable postings by themselves
+
+### Recommended workflow
+
+1. Run `search-grounding --check-config`
+2. Generate target-aware prompts with `--dry-run`
+3. Run fixture or controlled live grounding
+4. Resolve discovery URLs to canonical employer/ATS pages manually
+5. Import selected URLs or pasted posting text into Jobs Recon later
 
 ## Setup
 
