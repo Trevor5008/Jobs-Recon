@@ -4,7 +4,7 @@ from pathlib import Path
 from jobs_recon.models import JobPosting
 
 REQUIRED_FIELDS = ("title", "company", "description")
-
+# Define the skill vocabulary
 SKILL_VOCABULARY: tuple[str, ...] = (
     "Python",
     "JavaScript",
@@ -23,13 +23,13 @@ SKILL_VOCABULARY: tuple[str, ...] = (
     "Teamwork",
 )
 
-
+# Extract skills from a posting description
 def extract_skills(description: str) -> list[str]:
     """Return matched skills in vocabulary order (deterministic)."""
     desc_lower = description.lower()
     return [skill for skill in SKILL_VOCABULARY if skill.lower() in desc_lower]
 
-
+# Validate a posting
 def _validate_posting(raw: dict, index: int) -> None:
     if not isinstance(raw, dict):
         raise ValueError(f"Posting at index {index} must be an object, got {type(raw).__name__}")
@@ -40,7 +40,7 @@ def _validate_posting(raw: dict, index: int) -> None:
             f"Posting at index {index} is missing required field(s): {', '.join(missing)}"
         )
 
-
+# Parse a posting into a JobPosting object
 def _parse_posting(raw: dict) -> JobPosting:
     skills = extract_skills(raw["description"])
     return JobPosting(
@@ -53,7 +53,7 @@ def _parse_posting(raw: dict) -> JobPosting:
         skills=skills,
     )
 
-
+# Load postings from a local JSON file
 def load_postings(path: Path) -> list[JobPosting]:
     """Load and validate postings from a local JSON file."""
     text = path.read_text(encoding="utf-8")

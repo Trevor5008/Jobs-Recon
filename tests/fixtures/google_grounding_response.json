@@ -2,48 +2,51 @@
   "provider": "google_grounding",
   "model": "gemini-2.5-flash",
   "timestamp": "2026-06-22T12:00:00Z",
-  "response_text": "Several entry-level AI and software internship postings appear on public ATS pages in the Miami / South Florida area or remote. ExampleCo lists an AI Engineer Intern on Greenhouse, and Acme lists a Software Engineer Intern on Lever. Indeed also surfaces aggregator listings, but canonical ATS pages are preferable for import.",
+  "response_text": "Several entry-level AI and software internship postings appear in discovery results. One active Greenhouse posting resolves to a canonical ATS URL. A Lever posting is marked inactive. Indeed and jobleads aggregator echoes appear without canonical URLs. A Vertex redirect wrapper points to a Workday posting but requires manual resolution.",
   "citations": [
     {
-      "url": "https://boards.greenhouse.io/exampleco/jobs/123456",
+      "discovery_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/EXAMPLE-ACTIVE",
+      "canonical_posting_url": "https://boards.greenhouse.io/exampleco/jobs/123456",
       "title": "AI Engineer Intern - ExampleCo",
-      "snippet": "Greenhouse posting for an AI Engineer Intern role in Miami or remote."
+      "snippet": "Greenhouse posting for an AI Engineer Intern role in Miami or remote.",
+      "availability_status": "active"
     },
     {
-      "url": "https://www.indeed.com/viewjob?jk=abc123",
+      "discovery_url": "https://www.indeed.com/viewjob?jk=abc123",
       "title": "Machine Learning Engineer - Indeed",
-      "snippet": "Aggregator listing for a machine learning engineer role."
+      "snippet": "Aggregator listing for a machine learning engineer role.",
+      "availability_status": "aggregator_only"
     },
     {
-      "url": "https://jobs.lever.co/acme/abc-def-ghi",
+      "discovery_url": "https://jobs.lever.co/acme/abc-def-ghi",
+      "canonical_posting_url": "https://jobs.lever.co/acme/abc-def-ghi",
       "title": "Software Engineer Intern | Acme",
-      "snippet": "Lever posting for a software engineer intern role."
+      "snippet": "Lever posting marked as taken down in fixture data.",
+      "availability_status": "inactive"
+    },
+    {
+      "discovery_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/EXAMPLE-UNCERTAIN",
+      "title": "myworkdayjobs.com",
+      "snippet": "Vertex redirect wrapper without a resolved canonical posting URL.",
+      "availability_status": "uncertain"
+    },
+    {
+      "discovery_url": "https://www.jobleads.com/job/example-ai-intern",
+      "title": "AI Intern - JobLeads",
+      "snippet": "Aggregator echo without a canonical employer posting URL.",
+      "availability_status": "aggregator_only"
+    },
+    {
+      "discovery_url": "https://joinhandshake.com/login",
+      "title": "Handshake login",
+      "snippet": "Login-gated school job board surface.",
+      "availability_status": "login_gated"
     }
   ],
   "grounding_metadata": {
     "webSearchQueries": [
       "AI Engineer intern Miami Greenhouse",
       "Software Engineer Intern remote Lever"
-    ],
-    "groundingChunks": [
-      {
-        "web": {
-          "uri": "https://boards.greenhouse.io/exampleco/jobs/123456",
-          "title": "AI Engineer Intern - ExampleCo"
-        }
-      },
-      {
-        "web": {
-          "uri": "https://www.indeed.com/viewjob?jk=abc123",
-          "title": "Machine Learning Engineer - Indeed"
-        }
-      },
-      {
-        "web": {
-          "uri": "https://jobs.lever.co/acme/abc-def-ghi",
-          "title": "Software Engineer Intern | Acme"
-        }
-      }
     ]
   }
 }

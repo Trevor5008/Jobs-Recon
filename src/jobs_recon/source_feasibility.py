@@ -1,5 +1,7 @@
+"""Source feasibility report for Handshake."""
 from dataclasses import dataclass
 
+# Define the handshake investigation checklist
 HANDSHAKE_INVESTIGATION_CHECKLIST: tuple[str, ...] = (
     "Check whether Handshake provides export/download options",
     "Check whether saved searches can produce email alerts",
@@ -10,7 +12,7 @@ HANDSHAKE_INVESTIGATION_CHECKLIST: tuple[str, ...] = (
     "Decide whether MVP 0.3 should use manual import, email digest import, or a direct adapter",
 )
 
-
+# Define the source feasibility report
 @dataclass
 class SourceFeasibilityReport:
     source_name: str
@@ -23,7 +25,7 @@ class SourceFeasibilityReport:
     recommended_next_step: str
     investigation_checklist: list[str]
 
-
+# Define the handshake profile
 def handshake_profile() -> SourceFeasibilityReport:
     return SourceFeasibilityReport(
         source_name="Handshake",
@@ -53,12 +55,12 @@ def handshake_profile() -> SourceFeasibilityReport:
         investigation_checklist=list(HANDSHAKE_INVESTIGATION_CHECKLIST),
     )
 
-
+# Define the source profiles
 SOURCE_PROFILES: dict[str, SourceFeasibilityReport] = {
     "handshake": handshake_profile(),
 }
 
-
+# Get a source profile
 def get_source_profile(source_key: str) -> SourceFeasibilityReport:
     key = source_key.strip().lower()
     if key not in SOURCE_PROFILES:
@@ -67,9 +69,9 @@ def get_source_profile(source_key: str) -> SourceFeasibilityReport:
 
     return SOURCE_PROFILES[key]
 
-
+# Generate a feasibility report
 def generate_feasibility_report(report: SourceFeasibilityReport) -> str:
-    """Build a deterministic Markdown feasibility report."""
+    # Build the lines
     lines: list[str] = [
         f"# Source Feasibility Report: {report.source_name}",
         "",
@@ -89,9 +91,11 @@ def generate_feasibility_report(report: SourceFeasibilityReport) -> str:
         "",
     ]
 
+    # Add the known limitations
     for limitation in report.known_limitations:
         lines.append(f"- {limitation}")
 
+    # Add the possible ingestion paths
     lines.extend(
         [
             "",
@@ -103,9 +107,11 @@ def generate_feasibility_report(report: SourceFeasibilityReport) -> str:
         ]
     )
 
+    # Add the possible ingestion paths
     for path in report.possible_ingestion_paths:
         lines.append(f"- {path}")
 
+    # Add the recommendation
     lines.extend(
         [
             "",
@@ -118,8 +124,10 @@ def generate_feasibility_report(report: SourceFeasibilityReport) -> str:
         ]
     )
 
+    # Add the investigation checklist
     for item in report.investigation_checklist:
         lines.append(f"- [ ] {item}")
 
+    # Add the empty line
     lines.append("")
     return "\n".join(lines)

@@ -10,7 +10,7 @@ STRING_LIST_FIELDS = (
     "required_skills",
 )
 
-
+# Validate a string list
 def _validate_string_list(value: object, field_name: str) -> list[str]:
     if value is None:
         return []
@@ -21,7 +21,7 @@ def _validate_string_list(value: object, field_name: str) -> list[str]:
             raise ValueError(f"{field_name}[{index}] must be a string")
     return value
 
-
+# Load a target brief from a local JSON file
 def load_target_brief(path: Path) -> TargetBrief:
     """Load and validate a target brief from a local JSON file."""
     text = path.read_text(encoding="utf-8")
@@ -59,12 +59,12 @@ def load_target_brief(path: Path) -> TargetBrief:
         notes=optional_string_fields["notes"],
     )
 
-
+# Check if a posting location matches a target location
 def _matches_location(posting_location: str, target_locations: list[str]) -> bool:
     posting_lower = posting_location.casefold()
     return any(location.casefold() == posting_lower for location in target_locations)
 
-
+# Find a title keyword match
 def _find_title_keyword_match(title: str, keywords: list[str]) -> str | None:
     title_lower = title.casefold()
     for keyword in keywords:
@@ -72,7 +72,7 @@ def _find_title_keyword_match(title: str, keywords: list[str]) -> str | None:
             return keyword
     return None
 
-
+# Find a seniority match
 def _find_seniority_match(posting: JobPosting, seniority_keywords: list[str]) -> str | None:
     text = f"{posting.title} {posting.description}".casefold()
     for keyword in seniority_keywords:
@@ -80,12 +80,12 @@ def _find_seniority_match(posting: JobPosting, seniority_keywords: list[str]) ->
             return keyword
     return None
 
-
+# Check if a posting has a skill
 def _posting_has_skill(posting: JobPosting, skill: str) -> bool:
     skill_lower = skill.casefold()
     return any(existing.casefold() == skill_lower for existing in posting.skills)
 
-
+# Evaluate a posting against a target
 def evaluate_posting_against_target(posting: JobPosting, target: TargetBrief) -> TargetMatch:
     """Apply deterministic target gates and evidence signals to one posting."""
     matched_reasons: list[str] = []
@@ -139,7 +139,7 @@ def evaluate_posting_against_target(posting: JobPosting, target: TargetBrief) ->
         warnings=warnings,
     )
 
-
+# Evaluate postings against a target
 def evaluate_postings_against_target(
     postings: list[JobPosting],
     target: TargetBrief,
