@@ -17,6 +17,9 @@ def _lead_from_mapping(data: dict) -> DiscoveryLead | None:
     snippet = data.get("snippet")
     canonical = data.get("canonical_posting_url")
     availability = data.get("availability_status")
+    source_family = data.get("source_family")
+    actionability = data.get("actionability")
+    recommendation = data.get("recommendation")
 
     lead = DiscoveryLead(
         discovery_url=discovery_url,
@@ -26,7 +29,27 @@ def _lead_from_mapping(data: dict) -> DiscoveryLead | None:
     )
     if isinstance(availability, str) and availability.strip():
         lead.availability_status = availability.strip()
-    return enrich_lead(lead)
+
+    preserve_source_family = False
+    preserve_actionability = False
+    preserve_recommendation = False
+
+    if isinstance(source_family, str) and source_family.strip():
+        lead.source_family = source_family.strip()
+        preserve_source_family = True
+    if isinstance(actionability, str) and actionability.strip():
+        lead.actionability = actionability.strip()
+        preserve_actionability = True
+    if isinstance(recommendation, str) and recommendation.strip():
+        lead.recommendation = recommendation.strip()
+        preserve_recommendation = True
+
+    return enrich_lead(
+        lead,
+        preserve_source_family=preserve_source_family,
+        preserve_actionability=preserve_actionability,
+        preserve_recommendation=preserve_recommendation,
+    )
 
 
 def _extract_grounding_metadata(payload: dict) -> dict | None:

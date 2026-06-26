@@ -82,7 +82,10 @@ def _format_lead_lines(lead: DiscoveryLead) -> list[str]:
         f"  - Canonical posting URL: {lead.canonical_posting_url or 'not resolved'}",
         f"  - Display domain: {lead.display_domain or 'n/a'}",
         f"  - Source type: {lead.source_type}",
+        f"  - Source family: {lead.source_family}",
         f"  - Availability: {lead.availability_status}",
+        f"  - Actionability: {lead.actionability}",
+        f"  - Recommendation: {lead.recommendation or 'n/a'}",
     ]
     if is_vertex_redirect_url(lead.discovery_url) and not lead.canonical_posting_url:
         lines.append(
