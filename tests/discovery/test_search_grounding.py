@@ -171,6 +171,9 @@ def test_search_feasibility_report_includes_lead_fields():
     assert "Discovery URL:" in report
     assert "Canonical posting URL:" in report
     assert "Availability:" in report
+    assert "Source family:" in report
+    assert "Actionability:" in report
+    assert "Recommendation:" in report
     assert "### Active canonical leads" in report
     assert "### Aggregator-only leads" in report
     assert "### Uncertain / manual review needed" in report

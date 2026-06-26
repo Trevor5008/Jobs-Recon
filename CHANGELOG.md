@@ -2,6 +2,17 @@
 
 All notable milestones for Jobs Recon. Version numbers follow MVP releases.
 
+## MVP 0.3.4 — Grounded Lead Triage
+
+**Question:** Can Jobs Recon classify grounded citations into actionable source families without scraping?
+
+- Added source-family and actionability triage for grounded leads
+- Distinguished Dice, LinkedIn, Google Jobs/search, Handshake, ATS, and employer leads
+- Feasibility reports now explain what each lead is useful for
+- Preserved the boundary that grounded snippets are not full job descriptions
+
+**Does not do:** scrape job boards, automate browser/login flows, resolve redirect wrappers automatically, or import full postings from grounded snippets.
+
 ## MVP 0.3.2 — Vertex Grounding Config Hardening
 
 **Question:** Can the working Vertex / Gemini grounding setup become a repeatable local workflow?

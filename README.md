@@ -92,23 +92,19 @@ Feature subpackages mirror the three CLI commands. _Shared types live at the pac
 src/jobs_recon/
 ├── cli.py                 # argparse router and run_* dispatch
 ├── models.py              # JobPosting, TargetBrief, TargetMatch (shared)
-|
 ├── brief/                 # default command — local postings → Markdown brief
 │   ├── io.py              # load postings from JSON
 │   ├── target.py          # load target brief, evaluate matches
 │   └── report.py          # generate_brief
-|
-├── sources/               # source-feasibility 
+├── sources/               # source-feasibility
 │   ├── profiles.py        # static source profiles (e.g. Handshake)
 │   └── report.py          # feasibility Markdown
-|
 └── discovery/             # search-grounding command
     ├── types.py           # DiscoveryLead, constants
     ├── prompts.py         # target-aware grounded-search prompts
     ├── leads.py           # URL classification and enrichment
     ├── normalize.py       # fixture / API response normalization
     ├── report.py          # search feasibility Markdown
-    |
     └── providers/         # google (Vertex/Gemini), fixture
         ├── google.py
         ├── fixture.py
@@ -151,6 +147,8 @@ uv run jobs-recon source-feasibility --source handshake --output output/handshak
 ```
 
 ### Search grounding (Vertex / Gemini)
+
+Grounding finds cited leads. Static feasibility triage classifies lead actionability. Recon briefs analyze actual imported/pasted postings.
 
 Check config (no API call):
 
