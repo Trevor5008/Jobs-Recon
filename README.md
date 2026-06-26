@@ -10,6 +10,7 @@ See [CHANGELOG.md](CHANGELOG.md) for milestone history.
 
 - [Getting started](#getting-started)
 - [Project layout](#project-layout)
+- [Application flow](#application-flow)
 - [Commands](#commands)
   - [Recon brief (local postings)](#recon-brief-local-postings)
   - [Source feasibility](#source-feasibility)
@@ -126,6 +127,67 @@ tests/
 | default (recon brief) | `brief/` | Parse postings, score against target, render brief |
 | `source-feasibility` | `sources/` | Source profiles and feasibility reports |
 | `search-grounding` | `discovery/` | Prompts, grounding providers, lead normalization, reports |
+
+## Application flow
+
+Jobs Recon is a CLI router with three independent recon passes. Each pass reads local inputs (and optionally calls Vertex for discovery), then writes Obsidian-friendly Markdown. All paths load `.env` via `load_dotenv()` at CLI import; shared types live in `models.py` (`JobPosting`, `TargetBrief`, `TargetMatch`).
+
+```mermaid
+flowchart TD
+  entry["jobs-recon / python -m jobs_recon"] --> main[cli.main]
+  main -->|"default"| briefCmd[run_brief]
+  main -->|source-feasibility| sourceCmd[run_source_feasibility]
+  main -->|search-grounding| discoveryCmd[run_search_grounding]
+```
+
+### Recon brief and source feasibility
+
+```mermaid
+flowchart LR
+  subgraph briefFlow [Recon brief]
+    postingsJson["--input postings JSON"] --> loadPostings[brief/io.load_postings]
+    loadPostings --> extractSkills[constants.SKILL_VOCABULARY]
+    targetJson["optional --target JSON"] --> loadTarget[brief/target.load_target_brief]
+    loadTarget --> evaluate[evaluate_postings_against_target]
+    extractSkills --> generateBrief[brief/report.generate_brief]
+    evaluate --> generateBrief
+    generateBrief --> briefMd["--output Markdown brief"]
+  end
+
+  subgraph sourceFlow [Source feasibility]
+    sourceKey["--source key"] --> getProfile[sources/profiles.get_source_profile]
+    getProfile --> sourceReport[sources/report.generate_feasibility_report]
+    sourceReport --> sourceMd["--output Markdown report"]
+  end
+```
+
+Source feasibility uses static profiles only — no external API calls.
+
+### Search grounding
+
+```mermaid
+flowchart TD
+  start[run_search_grounding] --> checkConfig{--check-config?}
+  checkConfig -->|yes| configCheck[providers/google.check_google_grounding_config]
+  configCheck --> configOut["stdout report, exit 0/1"]
+  checkConfig -->|no| loadTarget[brief/target.load_target_brief]
+  loadTarget --> prompts[discovery/prompts.generate_discovery_prompts]
+  prompts --> mode{mode}
+  mode -->|dry-run| dryOut[print prompts to stdout]
+  mode -->|fixture| fixtureProv[ManualFixtureProvider]
+  mode -->|live| liveProv["GoogleGroundingProvider + Vertex/Gemini API"]
+  fixtureProv --> normalize["discovery/normalize + leads.enrich"]
+  liveProv --> normalize
+  normalize --> run[discovery/report.build_feasibility_run]
+  run --> report[discovery/report.generate_search_feasibility_report]
+  report --> fileOut["--output Markdown or stdout"]
+```
+
+Fixture and live paths run the **first prompt only** (`prompts[:1]`). `--check-config` cannot be combined with `--dry-run`, `--fixture`, `--live`, or `--output`. Discovery reuses `load_target_brief` from `brief/target.py` for target JSON.
+
+**Inputs:** postings JSON, target brief JSON, optional fixture JSON, `.env` for live Vertex.
+
+**Outputs:** Markdown recon brief, source feasibility report, or search feasibility report.
 
 ## Commands
 
