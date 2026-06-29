@@ -49,7 +49,17 @@ uv run jobs-recon \
   --output output/recon_brief.md
 ```
 
-Open `output/recon_brief.md` — it lists repeated skills, posting notes, and next actions.
+Open `output/recon_brief.md` — it lists repeated skills, posting notes, and next actions. With a target brief, the report also includes **Decision Buckets** (reachable / stretch / mismatch) to help you decide what to investigate next. These are explanation buckets, not rankings.
+
+### Decision-oriented output (MVP 0.4)
+
+- **Reachable / stretch / mismatch** — target-aware buckets for manual triage (not a scoring engine)
+- **Repeated skills** — each skill lists 2–3 example posting titles/companies
+- **Next actions** — 3–6 conservative bullets from local evidence, plus a small-sample caveat
+- **Lead actionability summary** — grounded discovery reports group citations by actionability and caution
+- Grounded citations remain **discovery evidence only** — not full posting text
+
+Jobs Recon does not apply to jobs, track applications, scrape sources, automate Handshake, or bypass logins.
 
 To scope the brief against a target (title keywords, locations, required skills):
 
@@ -188,6 +198,8 @@ Fixture and live paths run the **first prompt only** (`prompts[:1]`). `--check-c
 ## Commands
 
 ### Recon brief (local postings)
+
+Target-aware briefs add **Decision Buckets** (reachable, stretch, mismatch) and skill examples to support manual next steps.
 
 ```bash
 uv run jobs-recon --input examples/sample_postings.json --output output/recon_brief.md

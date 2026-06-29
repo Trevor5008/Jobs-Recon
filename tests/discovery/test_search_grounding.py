@@ -168,6 +168,7 @@ def test_search_feasibility_report_includes_lead_fields():
     report = generate_search_feasibility_report(run)
 
     assert "## Candidate Leads" in report
+    assert "## Lead Actionability Summary" in report
     assert "Discovery URL:" in report
     assert "Canonical posting URL:" in report
     assert "Availability:" in report
