@@ -1,5 +1,11 @@
 from collections import Counter
 
+from jobs_recon.brief.decision import (
+    build_decision_buckets,
+    format_bucket_entry,
+    generate_next_actions,
+    skill_example_labels,
+)
 from jobs_recon.brief.target import evaluate_postings_against_target
 from jobs_recon.models import JobPosting, TargetBrief, TargetMatch
 
@@ -24,6 +30,19 @@ def _skill_counts(postings: list[JobPosting]) -> list[tuple[str, int]]:
             counts[skill] += 1
 
     return sorted(counts.items(), key=lambda item: (-item[1], item[0]))
+
+
+def _append_repeated_skills_section(lines: list[str], postings: list[JobPosting]) -> None:
+    lines.extend(["## Repeated Skills", ""])
+    skill_counts = _skill_counts(postings)
+    if skill_counts:
+        for skill, count in skill_counts:
+            lines.append(f"- {skill}: {_pluralize_postings(count)}")
+            examples = skill_example_labels(postings, skill)
+            if examples:
+                lines.append(f"  - Examples: {'; '.join(examples)}")
+    else:
+        lines.append("- No vocabulary skills matched in the included postings.")
 
 
 def _append_posting_note(lines: list[str], posting: JobPosting, match: TargetMatch | None) -> None:
@@ -87,6 +106,47 @@ def _append_target_match_summary(
     )
 
 
+def _append_decision_buckets_section(
+    lines: list[str],
+    buckets,
+) -> None:
+    lines.extend(
+        [
+            "## Decision Buckets",
+            "",
+            "Explanation buckets for manual triage — not rankings or recommendations.",
+            "",
+            "### Reachable",
+            "",
+        ]
+    )
+    if buckets.reachable:
+        for posting, match in buckets.reachable:
+            lines.extend(format_bucket_entry(posting, match))
+            lines.append("")
+    else:
+        lines.append("_None in this run._")
+        lines.append("")
+
+    lines.extend(["### Stretch", ""])
+    if buckets.stretch:
+        for posting, match in buckets.stretch:
+            lines.extend(format_bucket_entry(posting, match))
+            lines.append("")
+    else:
+        lines.append("_None in this run._")
+        lines.append("")
+
+    lines.extend(["### Mismatch", ""])
+    if buckets.mismatch:
+        for posting, match in buckets.mismatch:
+            lines.extend(format_bucket_entry(posting, match))
+            lines.append("")
+    else:
+        lines.append("_None in this run._")
+        lines.append("")
+
+
 def _append_skipped_postings_section(
     lines: list[str],
     skipped: list[tuple[JobPosting, TargetMatch]],
@@ -110,6 +170,8 @@ def generate_brief(postings: list[JobPosting], target: TargetBrief | None = None
 
     included_pairs, skipped_pairs = evaluate_postings_against_target(postings, target)
     included_postings = [posting for posting, _match in included_pairs]
+    buckets = build_decision_buckets(list(included_pairs), list(skipped_pairs), target)
+    skill_counts = _skill_counts(included_postings)
 
     lines: list[str] = ["# Jobs Recon Brief", ""]
     _append_target_brief_section(lines, target)
@@ -134,13 +196,8 @@ def generate_brief(postings: list[JobPosting], target: TargetBrief | None = None
             ]
         )
 
-    lines.extend(["## Repeated Skills", ""])
-    skill_counts = _skill_counts(included_postings)
-    if skill_counts:
-        for skill, count in skill_counts:
-            lines.append(f"- {skill}: {_pluralize_postings(count)}")
-    else:
-        lines.append("- No vocabulary skills matched in the included postings.")
+    _append_decision_buckets_section(lines, buckets)
+    _append_repeated_skills_section(lines, included_postings)
 
     lines.extend(["", "## Posting Notes", ""])
     if included_pairs:
@@ -152,16 +209,17 @@ def generate_brief(postings: list[JobPosting], target: TargetBrief | None = None
 
     _append_skipped_postings_section(lines, skipped_pairs)
 
-    lines.extend(
-        [
-            "## Next Actions",
-            "",
-            "- Treat this as directional signal only; the sample is small.",
-            "- Compare repeated skills against current resume/project evidence.",
-            "- Run another focused recon pass with a tighter target brief.",
-            "",
-        ]
+    next_actions = generate_next_actions(
+        target=target,
+        buckets=buckets,
+        skill_counts=skill_counts,
+        included_count=len(included_pairs),
+        skipped_count=len(skipped_pairs),
     )
+    lines.extend(["## Next Actions", ""])
+    for action in next_actions:
+        lines.append(f"- {action}")
+    lines.append("")
 
     return "\n".join(lines)
 
@@ -176,6 +234,8 @@ def _generate_brief_without_target(postings: list[JobPosting]) -> str:
         f"- Companies represented: {len({p.company for p in postings})}",
         f"- Locations represented: {_format_locations(postings)}",
         "",
+        "Decision buckets require a target brief.",
+        "",
         "## Repeated Skills",
         "",
     ]
@@ -184,6 +244,9 @@ def _generate_brief_without_target(postings: list[JobPosting]) -> str:
     if skill_counts:
         for skill, count in skill_counts:
             lines.append(f"- {skill}: {_pluralize_postings(count)}")
+            examples = skill_example_labels(postings, skill)
+            if examples:
+                lines.append(f"  - Examples: {'; '.join(examples)}")
     else:
         lines.append("- No vocabulary skills matched in this sample.")
 
@@ -195,9 +258,9 @@ def _generate_brief_without_target(postings: list[JobPosting]) -> str:
         [
             "## Next Actions",
             "",
-            "- Treat this as directional signal only; the sample is small.",
             "- Compare repeated skills against current resume/project evidence.",
-            "- Run another focused recon pass with a tighter target brief.",
+            "- Add a target brief when you want reachable/stretch/mismatch decision buckets.",
+            "- Treat this as directional signal from a small local sample, not certainty about the wider market.",
             "",
         ]
     )

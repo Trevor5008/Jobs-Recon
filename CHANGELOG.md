@@ -2,6 +2,18 @@
 
 All notable milestones for Jobs Recon. Version numbers follow MVP releases.
 
+## MVP 0.4 — Decision-Oriented Output
+
+**Question:** Does the brief help the user decide what to do next?
+
+- Added reachable/stretch/mismatch decision buckets for target-aware recon briefs
+- Repeated skills now show compact example postings
+- Next actions are conservative and evidence-based
+- Grounded discovery reports include a lead actionability summary
+- Preserved the boundary that grounded citations are discovery evidence, not full postings
+
+**Does not do:** scraping, login automation, application tracking, ranking engines, or LLM-based classification.
+
 ## MVP 0.3.4 — Grounded Lead Triage
 
 **Question:** Can Jobs Recon classify grounded citations into actionable source families without scraping?

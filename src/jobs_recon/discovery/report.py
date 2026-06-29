@@ -3,6 +3,7 @@
 import json
 from collections import Counter
 
+from jobs_recon.discovery.decision_summary import render_lead_actionability_summary
 from jobs_recon.discovery.leads import (
     active_canonical_leads,
     all_citations,
@@ -137,6 +138,11 @@ def generate_search_feasibility_report(run: DiscoveryFeasibilityRun) -> str:
             "- Aggregator echoes are not actionable postings without a resolved canonical URL.",
             "- The legacy Google Custom Search JSON API is deprecated and not the current path.",
             "",
+        ]
+    )
+    lines.extend(render_lead_actionability_summary(leads))
+    lines.extend(
+        [
             "## Prompts Tested",
             "",
         ]
