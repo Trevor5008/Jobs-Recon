@@ -318,23 +318,6 @@ def test_existing_brief_command_still_works(tmp_path: Path):
     assert "Postings analyzed: 3" in output_path.read_text(encoding="utf-8")
 
 
-# Test that existing source feasibility command still works
-def test_existing_source_feasibility_command_still_works(tmp_path: Path):
-    output_path = tmp_path / "handshake_feasibility.md"
-    exit_code = main(
-        [
-            "source-feasibility",
-            "--source",
-            "handshake",
-            "--output",
-            str(output_path),
-        ]
-    )
-
-    assert exit_code == 0
-    assert "Source Feasibility Report: Handshake" in output_path.read_text(encoding="utf-8")
-
-
 # Test that existing target aware brief command still works
 def test_existing_target_aware_brief_command_still_works(tmp_path: Path):
     output_path = tmp_path / "recon_brief.md"

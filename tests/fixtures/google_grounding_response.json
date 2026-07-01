@@ -2,7 +2,7 @@
   "provider": "google_grounding",
   "model": "gemini-2.5-flash",
   "timestamp": "2026-06-22T12:00:00Z",
-  "response_text": "Several entry-level AI and software internship postings appear in discovery results. One active Greenhouse posting resolves to a canonical ATS URL. A Lever posting is marked inactive. Indeed and jobleads aggregator echoes appear without canonical URLs. A Vertex redirect wrapper points to a Workday posting but requires manual resolution.",
+  "response_text": "Several entry-level AI and software internship postings appear in discovery results. One active Greenhouse posting resolves to a canonical ATS URL. A Lever posting is marked inactive. Indeed and jobleads aggregator echoes appear without canonical URLs. A Vertex redirect wrapper points to a Workday posting but requires manual resolution. A LinkedIn login-gated lead is preserved as manual-only discovery evidence.",
   "citations": [
     {
       "discovery_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/EXAMPLE-ACTIVE",
@@ -37,9 +37,9 @@
       "availability_status": "aggregator_only"
     },
     {
-      "discovery_url": "https://joinhandshake.com/login",
-      "title": "Handshake login",
-      "snippet": "Login-gated school job board surface.",
+      "discovery_url": "https://www.linkedin.com/jobs/view/example",
+      "title": "LinkedIn login-gated lead",
+      "snippet": "Login-gated professional network job surface.",
       "availability_status": "login_gated"
     }
   ],

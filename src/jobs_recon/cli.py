@@ -17,14 +17,10 @@ from jobs_recon.discovery.report import (
     build_feasibility_run,
     generate_search_feasibility_report,
 )
-from jobs_recon.sources.profiles import get_source_profile
-from jobs_recon.sources.report import generate_feasibility_report
 
 # Load the environment variables
 load_dotenv()
 
-# Define the source feasibility command
-SOURCE_FEASIBILITY_COMMAND = "source-feasibility"
 # Define the search grounding command
 SEARCH_GROUNDING_COMMAND = "search-grounding"
 
@@ -50,27 +46,6 @@ def build_brief_parser() -> argparse.ArgumentParser:
         "--target",
         type=Path,
         help="Optional path to a target brief JSON file that scopes the recon pass.",
-    )
-    return parser
-
-# Build the parser for the source feasibility command
-def build_source_feasibility_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        prog=f"jobs-recon {SOURCE_FEASIBILITY_COMMAND}",
-        description="Generate a source feasibility report before building an adapter.",
-    )
-    # Add the source argument
-    parser.add_argument(
-        "--source",
-        required=True,
-        help="Source to evaluate (for example: handshake).",
-    )
-    # Add the output argument
-    parser.add_argument(
-        "--output",
-        required=True,
-        type=Path,
-        help="Path where the Markdown feasibility report will be written.",
     )
     return parser
 
@@ -285,36 +260,9 @@ def run_search_grounding(argv: list[str]) -> int:
 
     return 0
 
-# Run the source feasibility command
-def run_source_feasibility(argv: list[str]) -> int:
-    # Build the parser
-    parser = build_source_feasibility_parser()
-    args = parser.parse_args(argv)
-
-    # Get the source profile
-    try:
-        profile = get_source_profile(args.source)
-    except ValueError as exc:
-        print(f"Error: {exc}", file=sys.stderr)
-        return 1
-
-    # Generate the feasibility report
-    report = generate_feasibility_report(profile)
-    # Create the output directory if it doesn't exist
-    output_path: Path = args.output
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_text(report, encoding="utf-8")
-    print(f"Wrote source feasibility report to {output_path}")
-    return 0
-
 # Run the main command
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
-    # Check if the source feasibility command is used
-
-    if argv and argv[0] == SOURCE_FEASIBILITY_COMMAND:
-        return run_source_feasibility(argv[1:])
-    # Check if the search grounding command is used
     if argv and argv[0] == SEARCH_GROUNDING_COMMAND:
         return run_search_grounding(argv[1:])
     # Run the brief command

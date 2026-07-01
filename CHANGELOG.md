@@ -2,6 +2,16 @@
 
 All notable milestones for Jobs Recon. Version numbers follow MVP releases.
 
+## MVP 0.4.1 — Remove Source Feasibility
+
+**Question:** Can Jobs Recon stay focused now that static source profiles are out of scope?
+
+- Removed the `source-feasibility` CLI command and `sources/` package
+- Removed Handshake-specific discovery triage and static source profiles
+- Kept `search-grounding` for grounded lead discovery and actionability reports
+
+**Does not do:** static job-board feasibility memos or Handshake-specific workflows.
+
 ## MVP 0.4 — Decision-Oriented Output
 
 **Question:** Does the brief help the user decide what to do next?
@@ -19,7 +29,7 @@ All notable milestones for Jobs Recon. Version numbers follow MVP releases.
 **Question:** Can Jobs Recon classify grounded citations into actionable source families without scraping?
 
 - Added source-family and actionability triage for grounded leads
-- Distinguished Dice, LinkedIn, Google Jobs/search, Handshake, ATS, and employer leads
+- Distinguished Dice, LinkedIn, Google Jobs/search, ATS, and employer leads
 - Feasibility reports now explain what each lead is useful for
 - Preserved the boundary that grounded snippets are not full job descriptions
 
@@ -65,14 +75,12 @@ Replaced the non-viable Google Custom Search JSON API / dorking path.
 
 **Does not do:** live fetching, scraping, authentication, or recommendation logic.
 
-## MVP 0.2 — Source Feasibility
+## MVP 0.2 — Source Feasibility (removed in 0.4.1)
 
-**Question:** Which high-signal source can Jobs Recon use first without becoming Jobs-Radar again?
+**Question:** Which source-evaluation path can Jobs Recon use without becoming Jobs-Radar again?
 
-- Added `source-feasibility` CLI and Handshake feasibility profile
-- Markdown reports with access constraints and manual investigation checklist
-
-Handshake is high-signal but access-uncertain; no adapter implemented.
+- Added `source-feasibility` CLI plumbing and a Handshake feasibility profile
+- Later removed when Jobs Recon focused on public canonical leads and local inputs
 
 ## MVP 0.1 — Local Recon Brief
 

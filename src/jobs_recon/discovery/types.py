@@ -28,7 +28,6 @@ SOURCE_FAMILY_DICE = "dice"
 SOURCE_FAMILY_LINKEDIN = "linkedin"
 SOURCE_FAMILY_GOOGLE_JOBS = "google_jobs"
 SOURCE_FAMILY_GOOGLE_SEARCH = "google_search"
-SOURCE_FAMILY_HANDSHAKE = "handshake"
 SOURCE_FAMILY_VERTEX_REDIRECT = "vertex_redirect"
 SOURCE_FAMILY_UNKNOWN = "unknown"
 
@@ -55,7 +54,7 @@ VERTEX_REDIRECT_PATH_PREFIX = "/grounding-api-redirect/"
 CANONICAL_ATS_GUIDANCE = (
     "Prefer canonical employer career pages and public ATS pages such as Greenhouse, "
     "Lever, Ashby, Workable, SmartRecruiters, BambooHR, JazzHR, or Workday. Avoid "
-    "treating LinkedIn, Indeed, Handshake, or Google Jobs panels as canonical sources. "
+    "treating LinkedIn, Indeed, or Google Jobs panels as canonical sources. "
     "Return source URLs where possible."
 )
 
@@ -79,8 +78,6 @@ AGGREGATOR_DOMAIN_PATTERNS: tuple[tuple[str, ...], ...] = (
     ("glassdoor.com",),
     ("ziprecruiter.com",),
     ("dice.com",),
-    ("joinhandshake.com",),
-    ("app.joinhandshake.com",),
     ("jobleads.com",),
     ("remoterocketship.com",),
     ("prosple.com",),

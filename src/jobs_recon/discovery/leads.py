@@ -23,7 +23,6 @@ from jobs_recon.discovery.types import (
     SOURCE_FAMILY_EMPLOYER,
     SOURCE_FAMILY_GOOGLE_JOBS,
     SOURCE_FAMILY_GOOGLE_SEARCH,
-    SOURCE_FAMILY_HANDSHAKE,
     SOURCE_FAMILY_LINKEDIN,
     SOURCE_FAMILY_UNKNOWN,
     SOURCE_FAMILY_VERTEX_REDIRECT,
@@ -38,8 +37,6 @@ from jobs_recon.discovery.types import (
     DiscoveryLead,
     DiscoveryResponse,
 )
-
-_HANDSHAKE_HOSTS = frozenset({"joinhandshake.com", "app.joinhandshake.com"})
 
 
 def _normalized_host(url: str) -> str:
@@ -153,8 +150,6 @@ def infer_source_family(url: str) -> str:
         ):
             return SOURCE_FAMILY_GOOGLE_JOBS
 
-    if host in _HANDSHAKE_HOSTS or host.endswith(".joinhandshake.com"):
-        return SOURCE_FAMILY_HANDSHAKE
 
     for pattern in (("linkedin.com", "jobs"),):
         if _host_matches_pattern(host, pattern) and _path_matches_pattern(path_segments, pattern):
@@ -193,9 +188,6 @@ def infer_actionability(lead: DiscoveryLead) -> str:
         return ACTIONABILITY_MANUAL_REVIEW_ONLY
     if family in (SOURCE_FAMILY_GOOGLE_JOBS, SOURCE_FAMILY_GOOGLE_SEARCH):
         return ACTIONABILITY_SEARCH_SURFACE_ONLY
-    if family == SOURCE_FAMILY_HANDSHAKE:
-        return ACTIONABILITY_MANUAL_REVIEW_ONLY
-
     return ACTIONABILITY_MANUAL_REVIEW
 
 
@@ -219,9 +211,6 @@ def recommendation_for_lead(lead: DiscoveryLead) -> str:
         ),
         SOURCE_FAMILY_GOOGLE_SEARCH: (
             "Search surface only; resolve to a canonical employer or ATS URL before import."
-        ),
-        SOURCE_FAMILY_HANDSHAKE: (
-            "Student/new-grad signal only; use manually unless export/email/API access is verified."
         ),
         SOURCE_FAMILY_VERTEX_REDIRECT: (
             "Grounding provenance wrapper only; resolve manually before treating as actionable."

@@ -1,6 +1,6 @@
 # Jobs Recon
 
-CLI-first job-market reconnaissance. Parse local postings, run scoped recon passes, and export Obsidian-friendly Markdown briefs and feasibility reports.
+CLI-first job-market reconnaissance. Parse local postings, run scoped recon passes, and export Obsidian-friendly Markdown briefs and grounded discovery reports.
 
 See [CHANGELOG.md](CHANGELOG.md) for milestone history.
 
@@ -13,7 +13,6 @@ See [CHANGELOG.md](CHANGELOG.md) for milestone history.
 - [Application flow](#application-flow)
 - [Commands](#commands)
   - [Recon brief (local postings)](#recon-brief-local-postings)
-  - [Source feasibility](#source-feasibility)
   - [Search grounding (Vertex / Gemini)](#search-grounding-vertex--gemini)
 - [Tests](#tests)
 - [Input format](#input-format)
@@ -59,7 +58,7 @@ Open `output/recon_brief.md` — it lists repeated skills, posting notes, and ne
 - **Lead actionability summary** — grounded discovery reports group citations by actionability and caution
 - Grounded citations remain **discovery evidence only** — not full posting text
 
-Jobs Recon does not apply to jobs, track applications, scrape sources, automate Handshake, or bypass logins.
+Jobs Recon does not apply to jobs, track applications, scrape sources, or bypass logins.
 
 To scope the brief against a target (title keywords, locations, required skills):
 
@@ -97,7 +96,7 @@ uv run pytest
 
 ## Project layout
 
-Feature subpackages mirror the three CLI commands. _Shared types live at the package root_
+Feature subpackages mirror the two CLI commands. _Shared types live at the package root_
 
 ```
 src/jobs_recon/
@@ -107,9 +106,6 @@ src/jobs_recon/
 │   ├── io.py              # load postings from JSON
 │   ├── target.py          # load target brief, evaluate matches
 │   └── report.py          # generate_brief
-├── sources/               # source-feasibility
-│   ├── profiles.py        # static source profiles (e.g. Handshake)
-│   └── report.py          # feasibility Markdown
 └── discovery/             # search-grounding command
     ├── types.py           # DiscoveryLead, constants
     ├── prompts.py         # target-aware grounded-search prompts
@@ -124,29 +120,26 @@ src/jobs_recon/
 tests/
 ├── brief/
 ├── discovery/
-├── sources/
 └── fixtures/
 ```
 
 | CLI command | Package | Role |
 |---|---|---|
 | default (recon brief) | `brief/` | Parse postings, score against target, render brief |
-| `source-feasibility` | `sources/` | Source profiles and feasibility reports |
 | `search-grounding` | `discovery/` | Prompts, grounding providers, lead normalization, reports |
 
 ## Application flow
 
-Jobs Recon is a CLI router with three independent recon passes. Each pass reads local inputs (and optionally calls Vertex for discovery), then writes Obsidian-friendly Markdown. All paths load `.env` via `load_dotenv()` at CLI import; shared types live in `models.py` (`JobPosting`, `TargetBrief`, `TargetMatch`).
+Jobs Recon is a CLI router with two independent recon passes. Each pass reads local inputs (and optionally calls Vertex for discovery), then writes Obsidian-friendly Markdown. All paths load `.env` via `load_dotenv()` at CLI import; shared types live in `models.py` (`JobPosting`, `TargetBrief`, `TargetMatch`).
 
 ```mermaid
 flowchart TD
   entry["jobs-recon / python -m jobs_recon"] --> main[cli.main]
   main -->|"default"| briefCmd[run_brief]
-  main -->|source-feasibility| sourceCmd[run_source_feasibility]
   main -->|search-grounding| discoveryCmd[run_search_grounding]
 ```
 
-### Recon brief and source feasibility
+### Recon brief
 
 ```mermaid
 flowchart LR
@@ -159,21 +152,11 @@ flowchart LR
     evaluate --> generateBrief
     generateBrief --> briefMd["--output Markdown brief"]
   end
-
-  subgraph sourceFlow [Source feasibility]
-    sourceKey["--source key"] --> getProfile[sources/profiles.get_source_profile]
-    getProfile --> sourceReport[sources/report.generate_feasibility_report]
-    sourceReport --> sourceMd["--output Markdown report"]
-  end
 ```
-
-Source feasibility uses static profiles only — no external API calls.
 
 ### Search grounding
 
-```mermaid
-flowchart TD
-  start[run_search_grounding] --> checkConfig{--check-config?}
+```mermaid --> checkConfig{--check-config?}
   checkConfig -->|yes| configCheck[providers/google.check_google_grounding_config]
   configCheck --> configOut["stdout report, exit 0/1"]
   checkConfig -->|no| loadTarget[brief/target.load_target_brief]
@@ -193,7 +176,7 @@ Fixture and live paths run the **first prompt only** (`prompts[:1]`). `--check-c
 
 **Inputs:** postings JSON, target brief JSON, optional fixture JSON, `.env` for live Vertex.
 
-**Outputs:** Markdown recon brief, source feasibility report, or search feasibility report.
+**Outputs:** Markdown recon brief or search grounding report.
 
 ## Commands
 
@@ -212,12 +195,6 @@ uv run jobs-recon \
   --input examples/sample_postings.json \
   --target examples/target_brief.json \
   --output output/recon_brief.md
-```
-
-### Source feasibility
-
-```bash
-uv run jobs-recon source-feasibility --source handshake --output output/handshake_feasibility.md
 ```
 
 ### Search grounding (Vertex / Gemini)
